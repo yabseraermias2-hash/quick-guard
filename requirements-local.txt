@@ -1,0 +1,34 @@
+# Local-only extras for QUICK's original tools (used when ENABLE_QUICK_TOOLS=true).
+# Not needed for the deployed version.
+-r requirements.txt
+
+# Mic voice mode (PyAudio needs PortAudio: brew install portaudio)
+SpeechRecognition==3.17.0
+PyAudio==0.2.14
+
+# Long-term memory
+chromadb==1.5.9
+
+# Search / research
+duckduckgo_search==8.1.1
+Wikipedia-API==0.16.0
+arxiv==4.0.2
+playwright==1.64.1
+
+# Math + graphs
+sympy==1.14.0
+matplotlib==3.11.2
+numpy==2.5.4
+
+# File analysis
+pandas==3.1.1
+pdfplumber==0.11.10
+pypdf==6.21.4
+python-docx==1.2.0
+pillow==13.0.0
+pytesseract==0.3.13
+
+# Security / OSINT
+phonenumbers==9.0.42
+dnspython==2.9.2
+scapy==2.8.0
