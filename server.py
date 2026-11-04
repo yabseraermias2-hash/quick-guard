@@ -64,6 +64,25 @@ app = Flask(__name__)
 CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # 64 MB upload limit
 
+# ── QUICK Guard ────────────────────────────────────────────────────────────────
+import guard
+from guard.paypal import assert_sandbox
+
+assert_sandbox()  # refuse to start against anything but the PayPal sandbox
+
+_secret = os.getenv('SECRET_KEY', '').strip()
+if not _secret:
+    import secrets
+    _secret = secrets.token_hex(32)
+    print("[Guard] SECRET_KEY not set — using a temporary one (sessions reset on restart).")
+app.secret_key = _secret
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=bool(os.getenv('RENDER')),  # HTTPS-only cookie on Render
+)
+guard.register(app)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 _speak_proc  = None
