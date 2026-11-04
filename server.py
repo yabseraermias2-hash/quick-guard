@@ -1021,14 +1021,21 @@ def health():
     except Exception:
         pass
 
+    # On the deployed site the AI is Groq, not Ollama. Guard also works with
+    # keyword rules alone, so a missing AI is "degraded", never "down".
+    from guard.ai_provider import provider_name
+    provider = provider_name()
+    ai_ok = ollama_ok if provider == 'ollama' else bool(os.getenv('GROQ_API_KEY', '').strip())
+
     uptime_s = int(time.time() - _start_time)
     return jsonify({
-        'status': 'ok' if ollama_ok else 'degraded',
+        'status': 'ok' if ai_ok else 'degraded',
+        'ai_provider': provider,
         'ollama': ollama_ok,
         'models': ollama_models,
         'uptime': uptime_s,
         'tools_enabled': QUICK_TOOLS_ENABLED,
-    }), 200 if ollama_ok else 503
+    }), 200 if ai_ok else 503
 
 
 # ── Enterprise Monitoring ──────────────────────────────────────────────────────

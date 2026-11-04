@@ -469,6 +469,7 @@
       100% { box-shadow: inset 0 0 100px 20px rgba(255,0,0,0.8); } 
     }
   </style>
+  <link rel="stylesheet" href="/static/guard.css">
 </head>
 <body>
 
@@ -481,6 +482,45 @@
 
   <!-- ── Left Panel: Reports ── -->
   <aside class="panel left-panel">
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-pane="guardFormPane">QUICK GUARD</button>
+      <button class="panel-tab" data-pane="toolsLeftPane" data-tools-only hidden>TOOLS</button>
+    </div>
+
+    <div class="tab-pane" id="guardFormPane">
+      <form id="guardForm" class="guard-form" novalidate autocomplete="off">
+        <label>Amount (USD)
+          <input type="text" id="gAmount" inputmode="decimal" placeholder="25.00" maxlength="9" required>
+        </label>
+        <label>Send to (PayPal email)
+          <input type="email" id="gRecipient" placeholder="friend@example.com" maxlength="254" required>
+        </label>
+        <label>Message or invoice <span class="g-optional">(optional)</span>
+          <textarea id="gMessage" rows="5" maxlength="5000" placeholder="Paste the invoice or message you received..."></textarea>
+        </label>
+        <div class="g-samples">
+          Try:
+          <button type="button" class="g-link" data-sample="safe">safe invoice</button> ·
+          <button type="button" class="g-link" data-sample="scam">scam message</button>
+        </div>
+        <label>Warning language
+          <select id="gLanguage"></select>
+        </label>
+        <label class="g-check">
+          <input type="checkbox" id="gUseLocation"> Use my location (city level only)
+        </label>
+        <div class="g-demo" id="gDemoBox" hidden>
+          <label class="g-check">
+            <input type="checkbox" id="gDemoOn"> <span><b>DEMO MODE</b> · simulate paying from</span>
+          </label>
+          <select id="gDemoCity" disabled></select>
+        </div>
+        <button type="submit" class="g-submit" id="gSubmit">CHECK WITH QUICK GUARD</button>
+        <div class="g-error" id="gError" role="alert"></div>
+      </form>
+    </div>
+
+    <div class="tab-pane" id="toolsLeftPane" hidden>
     <div class="panel-header">
       <span>MONITORING (24/7)</span>
     </div>
@@ -497,6 +537,7 @@
     <div class="report-list" id="reportList">
       <div style="color:var(--text2);font-size:10px;padding:12px;text-align:center;">Loading...</div>
     </div>
+    </div><!-- #toolsLeftPane -->
   </aside>
 
   <!-- ── Main Area ── -->
@@ -537,12 +578,38 @@
 
   <!-- ── Right Panel: Scan Output ── -->
   <aside class="panel right-panel">
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-pane="guardResultPane">RESULT</button>
+      <button class="panel-tab" data-pane="toolsRightPane" data-tools-only hidden>SCAN OUTPUT</button>
+    </div>
+
+    <div class="tab-pane" id="guardResultPane">
+      <div class="g-result" id="gResult" hidden aria-live="polite">
+        <div class="g-level" id="gLevel"></div>
+        <div class="g-score"><div class="g-score-bar" id="gScoreBar"></div></div>
+        <div class="g-score-text" id="gScoreText"></div>
+        <p class="g-explanation" id="gExplanation"></p>
+        <ul class="g-flags" id="gFlags"></ul>
+        <div class="g-meta" id="gMeta"></div>
+        <button type="button" class="g-secondary" id="gReplay">🔊 Play warning again</button>
+        <button type="button" class="g-confirm" id="gConfirm" hidden>Yes, this is me. Continue.</button>
+        <div id="paypalButtons" class="g-paypal"></div>
+        <div class="g-status" id="gStatus"></div>
+      </div>
+      <div class="g-empty" id="gEmpty">Enter a payment and QUICK Guard checks it before any money moves.</div>
+
+      <div class="panel-header">PAYMENT HISTORY</div>
+      <ul class="g-history" id="gHistory"><li class="g-empty">No payments yet.</li></ul>
+    </div>
+
+    <div class="tab-pane" id="toolsRightPane" hidden>
     <div class="panel-header">SCAN OUTPUT</div>
     <div class="scan-content">
       <div id="scanTargetLabel" class="scan-target-label"></div>
       <div id="scanSteps"></div>
       <div id="riskSummary" class="risk-summary"></div>
     </div>
+    </div><!-- #toolsRightPane -->
   </aside>
 
 </div><!-- .app -->
@@ -663,6 +730,10 @@ const palettes = {
   talking:   { core:[240,250,255], glow:[180,230,255], ring:[220,245,255] },
   scanning:  { core:[0,255,136],   glow:[0,180,100],   ring:[0,255,170]   },
   threat:    { core:[255,50,60],   glow:[200,10,30],   ring:[255,80,100]  },
+  // QUICK Guard verdicts
+  guard_low:    { core:[0,255,136],  glow:[0,190,100],  ring:[80,255,170]  },
+  guard_medium: { core:[255,204,0],  glow:[220,160,0],  ring:[255,225,90]  },
+  guard_high:   { core:[255,40,60],  glow:[210,10,30],  ring:[255,90,110]  },
 };
 let fromPal = {...palettes.idle}, toPal = {...palettes.idle}, palT = 1;
 
@@ -893,7 +964,7 @@ async function checkHealth() {
     if (data.status === 'ok') {
       hideHealthBanner();
     } else {
-      showHealthBanner('QUICK is reconnecting — Ollama may be down. Retrying...');
+      showHealthBanner('AI is offline. QUICK Guard is still protecting you with its keyword rules.');
     }
   } catch (e) {
     showHealthBanner('QUICK is reconnecting — server unreachable. Retrying...');
@@ -1371,10 +1442,13 @@ function stopSpeaking() {
   startWakeWord();
 }
 
-// Start wake word listener on page load (browser will ask mic permission)
+// Start wake word listener on page load (browser will ask mic permission).
+// Only when local QUICK tools are on: a public visitor shouldn't get a mic
+// prompt just for opening the page. The ◉ button still works for everyone.
 if (SpeechRec) {
-  // Delay slightly so page settles first
-  setTimeout(startWakeWord, 1500);
+  fetch('/health').then(r => r.json()).then(d => {
+    if (d.tools_enabled) setTimeout(startWakeWord, 1500);
+  }).catch(() => {});
 } else {
   console.warn('[QUICK] Web Speech API not supported in this browser');
 }
@@ -1894,5 +1968,7 @@ document.addEventListener('keydown', e => {
 loadReports();
 addMessage('quick', 'QUICK is online. Say "Hey QUICK" or type a message below. Upload files by clicking ⊕ or dragging them here.');
 </script>
+<script src="/static/location.js"></script>
+<script src="/static/guard.js"></script>
 </body>
 </html>

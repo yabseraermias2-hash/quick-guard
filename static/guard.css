@@ -1,1 +1,87 @@
 /* Part D — QUICK Guard dashboard styles. */
+:root {
+  --g-low: #00ff88;
+  --g-medium: #ffcc00;
+  --g-high: #ff2244;
+}
+
+.app { grid-template-columns: 300px 1fr 320px; }
+
+/* ── Tabs ── */
+.panel-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
+.panel-tab {
+  flex:1; background:none; border:none; border-bottom:2px solid transparent;
+  color:var(--text2); font-family:var(--font); font-size:10px; letter-spacing:.2rem;
+  padding:10px 6px; cursor:pointer;
+}
+.panel-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.panel-tab[hidden] { display:none; }
+.tab-pane { display:flex; flex-direction:column; overflow-y:auto; min-height:0; flex:1; }
+.tab-pane[hidden], .g-result[hidden], .g-demo[hidden], .g-empty[hidden] { display:none; }
+
+/* ── Form ── */
+.guard-form { display:flex; flex-direction:column; gap:10px; padding:12px 14px; }
+.guard-form label { display:flex; flex-direction:column; gap:4px; font-size:10px; letter-spacing:.1rem; color:var(--text2); }
+.guard-form input[type=text], .guard-form input[type=email], .guard-form textarea, .guard-form select {
+  background:var(--bg3); color:var(--text); border:1px solid var(--border2);
+  font-family:var(--font); font-size:12px; padding:7px 8px; border-radius:3px; width:100%;
+}
+.guard-form textarea { resize:vertical; min-height:70px; }
+.guard-form input:focus, .guard-form textarea:focus, .guard-form select:focus { outline:1px solid var(--accent); }
+.g-optional { color:var(--text2); opacity:.7; letter-spacing:0; }
+.g-check { flex-direction:row !important; align-items:center; gap:8px !important; color:var(--text) !important; }
+.g-samples { font-size:10px; color:var(--text2); }
+.g-link { background:none; border:none; color:var(--accent); cursor:pointer; font-family:var(--font); font-size:10px; padding:0; text-decoration:underline; }
+.g-demo { border:1px dashed var(--g-medium); padding:8px; border-radius:3px; display:flex; flex-direction:column; gap:6px; }
+.g-demo b { color:var(--g-medium); }
+.g-submit {
+  background:rgba(0,212,255,.12); border:1px solid var(--accent); color:var(--accent);
+  font-family:var(--font); font-size:11px; letter-spacing:.2rem; padding:10px; cursor:pointer; border-radius:3px;
+}
+.g-submit:disabled { opacity:.5; cursor:wait; }
+.g-error { color:var(--g-high); font-size:11px; min-height:1em; }
+
+/* ── Result ── */
+.g-result { padding:14px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid var(--border); }
+.g-level { font-size:16px; letter-spacing:.3rem; font-weight:700; }
+.g-result.low .g-level { color:var(--g-low); }
+.g-result.medium .g-level { color:var(--g-medium); }
+.g-result.high .g-level { color:var(--g-high); }
+.g-score { height:6px; background:var(--bg3); border-radius:3px; overflow:hidden; }
+.g-score-bar { height:100%; width:0; transition:width .6s ease; }
+.g-result.low .g-score-bar { background:var(--g-low); }
+.g-result.medium .g-score-bar { background:var(--g-medium); }
+.g-result.high .g-score-bar { background:var(--g-high); }
+.g-score-text, .g-meta { font-size:10px; color:var(--text2); letter-spacing:.05rem; }
+.g-explanation { font-size:12px; line-height:1.55; color:var(--text); margin:0; }
+.g-flags { margin:0; padding-left:16px; font-size:11px; color:var(--text); line-height:1.5; }
+.g-flags li::marker { color:var(--g-high); }
+.g-secondary, .g-confirm {
+  background:none; border:1px solid var(--border2); color:var(--text); font-family:var(--font);
+  font-size:11px; padding:8px; cursor:pointer; border-radius:3px;
+}
+.g-confirm { border-color:var(--g-medium); color:var(--g-medium); }
+.g-confirm[hidden] { display:none; }
+.g-paypal { min-height:0; }
+.g-status { font-size:12px; }
+.g-status.ok { color:var(--g-low); }
+.g-status.bad { color:var(--g-high); }
+.g-empty { color:var(--text2); font-size:11px; padding:14px; line-height:1.5; }
+
+/* ── History ── */
+.g-history { list-style:none; margin:0; padding:0; }
+.g-history li.g-item { padding:8px 14px; border-bottom:1px solid var(--border); font-size:11px; display:grid; grid-template-columns:auto 1fr auto; gap:2px 8px; }
+.g-dot { width:8px; height:8px; border-radius:50%; margin-top:4px; grid-row:span 2; }
+.g-dot.captured { background:var(--g-low); }
+.g-dot.blocked { background:var(--g-high); }
+.g-item-sub { grid-column:2 / 4; color:var(--text2); font-size:10px; }
+
+/* ── Phones and small screens: stack everything and let the page scroll ── */
+@media (max-width:900px) {
+  html, body { overflow:auto; height:auto; }
+  /* Guard first on phones; QUICK's orb and chat come after the result */
+  .app { grid-template-areas:"left" "right" "main"; grid-template-columns:1fr; grid-template-rows:auto; height:auto; }
+  .left-panel, .right-panel { display:flex; border:none; border-bottom:1px solid var(--border); }
+  .main-area { height:70vh; }
+  .tab-pane { overflow:visible; }
+}
