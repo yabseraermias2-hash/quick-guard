@@ -1,0 +1,8 @@
+# Core packages — everything the deployed QUICK Guard needs.
+# For QUICK's extra local-only tools, use: pip install -r requirements-local.txt
+Flask==3.1.3
+flask-cors==6.0.5
+requests==2.34.2
+python-dotenv==1.2.4
+edge-tts==7.3.1
+gunicorn==26.2.0

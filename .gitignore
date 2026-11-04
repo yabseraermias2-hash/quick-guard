@@ -1,0 +1,59 @@
+# ── Secrets ──
+.env
+.env.*
+!.env.example
+
+# ── Virtual environments ──
+venv/
+.venv/
+env/
+quick_env/
+*_env/
+
+# ── Python build junk ──
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Personal data / memory (never commit) ──
+quick_memory.json
+quick_db/
+chroma/
+chroma_db/
+*.sqlite3
+uploads/
+reports/
+graphs/
+
+# ── Tool / editor / OS files ──
+.claude/
+.DS_Store
+.vscode/
+.idea/
+
+# ── Backups ──
+*.bak
+*.bak-*
+*.broken
+*.broken-*
+
+# ── Generated audio ──
+*.mp3
+*.wav
+
+# ── Logs ──
+*.log
+logs/
+
+# ── Model files ──
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.onnx
+models/
+
+# ── Original QUICK docs / old config (kept locally, not part of QUICK Guard) ──
+QUICK_MANUAL.md
+brief.txt
+quick_config.json
