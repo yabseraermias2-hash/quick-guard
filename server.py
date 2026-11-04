@@ -67,6 +67,7 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # 64 MB upload limit
 # ── QUICK Guard ────────────────────────────────────────────────────────────────
 import guard
 from guard.paypal import assert_sandbox
+from guard.translations import all_voices as guard_voices
 
 assert_sandbox()  # refuse to start against anything but the PayPal sandbox
 
@@ -980,7 +981,7 @@ def tts():
         return jsonify({'error': 'No text provided'}), 400
     if len(text) > _TTS_MAX_CHARS:
         text = text[:_TTS_MAX_CHARS]
-    if voice not in {v['id'] for v in EDGE_VOICES}:
+    if voice not in {v['id'] for v in EDGE_VOICES} | guard_voices():
         return jsonify({'error': 'Unknown voice'}), 400
     try:
         import asyncio, edge_tts
