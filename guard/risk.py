@@ -22,7 +22,21 @@ FAST_TRAVEL_SCORE = 50
 
 def location_score(location: dict) -> int:
     """Turn location.evaluate() output into a 0-100 score."""
-    raise NotImplementedError
+    if not location or not location.get('known'):
+        return 0
+    if location.get('impossible'):
+        return IMPOSSIBLE_TRAVEL_SCORE
+    if (location.get('speed_kmh') or 0) >= FAST_TRAVEL_KMH:
+        return FAST_TRAVEL_SCORE
+    return 0
+
+
+def _level(score: int) -> str:
+    if score >= HIGH_AT:
+        return HIGH
+    if score >= MEDIUM_AT:
+        return MEDIUM
+    return LOW
 
 
 def decide(scam: dict, location: dict) -> dict:
@@ -31,4 +45,26 @@ def decide(scam: dict, location: dict) -> dict:
     Returns {'level': LOW | MEDIUM | HIGH, 'score': int 0-100,
              'reasons': [str]}   # short reason codes, e.g. 'impossible_travel'
     """
-    raise NotImplementedError
+    s = max(0, min(100, int(scam.get('scam_score') or 0)))
+    l = location_score(location)
+    score = max(s, l)
+    level = _level(score)
+
+    reasons = []
+    if s >= HIGH_AT:
+        reasons.append('scam_likely')
+    elif s >= MEDIUM_AT:
+        reasons.append('scam_signs')
+    if l == IMPOSSIBLE_TRAVEL_SCORE:
+        reasons.append('impossible_travel')
+    elif l == FAST_TRAVEL_SCORE:
+        reasons.append('fast_travel')
+
+    # Two medium warnings together are a strong signal: scam text arriving
+    # from an unusual place looks like account takeover.
+    if s >= MEDIUM_AT and l >= MEDIUM_AT:
+        level = HIGH
+        score = max(score, HIGH_AT)
+        reasons.append('combined_signals')
+
+    return {'level': level, 'score': score, 'reasons': reasons}

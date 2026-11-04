@@ -28,7 +28,7 @@ function's inputs or outputs, talk to that part's owner first.
 | A: PayPal | Yabsera | `guard/paypal.py`, `guard/routes_payments.py`, `guard/store.py`, `scripts/sandbox_payment_test.py`, `tests/test_paypal.py`, `tests/test_payment_routes.py` |
 | B: AI scam check | Yabsera | `guard/ai_provider.py`, `guard/scam_check.py`, `guard/translations.py`, `tests/test_scam_check.py` |
 | C: Location | Yabsera | `guard/location.py`, `static/location.js`, `tests/test_location.py` |
-| D: Risk + dashboard | Yabsera | `guard/risk.py`, `guard/routes.py`, `guard/web.py`, `static/guard.js`, `static/guard.css`, `tests/test_risk.py` |
+| D: Risk + dashboard | Yabsera | `guard/risk.py`, `guard/routes.py`, `guard/web.py`, `static/guard.js`, `static/guard.css`, `tests/test_risk.py`, `tests/test_guard_routes.py` |
 
 Shared files (`server.py`, `index.html`): keep changes small and mention them in your PR.
 
