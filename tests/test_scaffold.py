@@ -15,9 +15,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
     ('post', '/api/paypal/order'),
     ('post', '/api/paypal/capture'),
 ])
-def test_guard_routes_are_registered(client, method, url):
-    r = getattr(client, method)(url, json={})
-    assert r.status_code != 404
+def test_guard_routes_are_registered(method, url):
+    import server
+    adapter = server.app.url_map.bind('localhost')
+    assert adapter.match(url, method=method.upper())  # raises if not registered
 
 
 def test_local_tools_are_off_by_default(client):
@@ -35,7 +36,7 @@ def test_refuses_non_sandbox_mode(monkeypatch):
 def test_only_sandbox_paypal_urls_in_code():
     """No live PayPal API URL may appear anywhere in our source."""
     live = re.compile(r'api(-m)?\.paypal\.com')
-    for path in list(ROOT.glob('*.py')) + list(ROOT.glob('guard/*.py')) + list(ROOT.glob('static/*.js')) + [ROOT / 'index.html']:
+    for path in list(ROOT.glob('*.py')) + list(ROOT.glob('guard/*.py')) + list(ROOT.glob('scripts/*.py')) + list(ROOT.glob('static/*.js')) + [ROOT / 'index.html']:
         text = path.read_text(encoding='utf-8', errors='ignore')
         assert not live.search(text), f'live PayPal URL in {path.name}'
 
