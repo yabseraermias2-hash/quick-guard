@@ -180,3 +180,40 @@ def test_every_message_has_english_and_amharic():
 
 def test_translation_fallback():
     assert t('verdict.HIGH', 'xx') == MESSAGES['verdict.HIGH']['en']
+
+
+# ── More languages ────────────────────────────────────────────────
+
+SCAMS_BY_LANGUAGE = {
+    'es': 'URGENTE: su cuenta ha sido suspendida. Pague de inmediato con tarjetas de regalo.',
+    'fr': 'Votre compte a été suspendu. Payez immédiatement avec des cartes cadeaux.',
+    'zh': '紧急通知：您的账户已被冻结。请立即用礼品卡付款。',
+    'hi': 'तुरंत भुगतान करें, आपका खाता निलंबित कर दिया गया है। गिफ्ट कार्ड से भुगतान करें।',
+    'ne': 'तुरुन्तै भुक्तानी गर्नुहोस्, तपाईंको खाता बन्द भएको छ। गिफ्ट कार्ड पठाउनुहोस्।',
+}
+
+
+@pytest.mark.parametrize('lang,text', SCAMS_BY_LANGUAGE.items())
+def test_scams_written_in_other_languages(lang, text):
+    r = scam_check.keyword_check(text, lang, 'x@gmail.com')
+    assert r['scam_score'] >= 70, (lang, r['categories'])
+    assert r['explanation'] == t('scam.many', lang, flags=t('flag.join', lang).join(r['red_flags']))
+
+
+@pytest.mark.parametrize('lang', ['zh', 'hi', 'ne', 'am'])
+def test_ai_answer_in_wrong_script_is_rejected(monkeypatch, lang):
+    fake_ai(monkeypatch, {'scam_score': 90, 'red_flags': [], 'explanation': 'English only'})
+    assert scam_check.check(GIFT_CARD, 'x@gmail.com', '50.00', language=lang)['source'] == 'keywords'
+
+
+def test_ai_answer_in_right_script_is_used(monkeypatch):
+    fake_ai(monkeypatch, {'scam_score': 90, 'red_flags': ['冒充客服'], 'explanation': '这是诈骗。'})
+    r = scam_check.check(GIFT_CARD, 'x@gmail.com', '50.00', language='zh')
+    assert r['source'] == 'ai+keywords' and r['explanation'] == '这是诈骗。'
+
+
+def test_every_language_has_a_voice_the_tts_route_accepts(client):
+    for code, info in LANGUAGES.items():
+        r = client.post('/tts', json={'text': t('verdict.HIGH', code), 'voice': info['voice']})
+        assert r.status_code in (200, 503), code   # 503 only if the voice service is offline
+        assert r.status_code != 400, f'{code} voice rejected'
