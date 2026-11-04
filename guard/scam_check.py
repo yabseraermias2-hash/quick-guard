@@ -29,6 +29,10 @@ _RULES = {
         r'\bwithin \d+ ?(hours?|hrs?|minutes?|mins?)\b', r'\bfinal (notice|warning)\b',
         r'\btoday only\b', r'\bexpires? (today|soon|in)\b', r'\blast chance\b',
         r'አስቸኳይ', r'ወዲያውኑ',
+        r'\burgente\b', r'\binmediatamente\b', r'\bde inmediato\b',        # es
+        r'\bimmédiatement\b', r'\btout de suite\b', r'\bdernier avis\b',    # fr
+        r'紧急', r'立即', r'马上',                                           # zh
+        r'तुरंत', r'तत्काल', r'तुरुन्तै',                                    # hi / ne
     ]),
     'threat_account_limited': (35, [
         r'\baccount (has been |is |will be )?(limited|suspended|locked|frozen|closed|restricted|disabled)\b',
@@ -36,6 +40,10 @@ _RULES = {
         r'\bunauthori[sz]ed (activity|transaction|login|access)\b',
         r'\blegal action\b', r'\b(police|arrest(ed)?|lawsuit)\b',
         r'መለያዎ.{0,20}(ታግዷል|ተዘግቷል|ተገድቧል)',
+        r'\bcuenta (ha sido |será |está )?(limitada|suspendida|bloqueada|cerrada)\b',  # es
+        r'\bcompte (a été |sera |est )?(limité|suspendu|bloqué|fermé)\b',               # fr
+        r'(账户|帐户|账号).{0,6}(冻结|限制|封锁|暂停|停用)',                             # zh
+        r'खाता.{0,15}(बंद|निलंबित|सीमित|ब्लॉक|बन्द|निलम्बित)',                        # hi / ne
     ]),
     'impersonation': (25, [
         r'\bpaypal (support|security|team|billing|service|resolution|department|staff)\b',
@@ -49,12 +57,17 @@ _RULES = {
         r'\b(password|passcode|pin|otp|one[- ]time (code|password)|security code|verification code)\b',
         r'\blog ?in details\b', r'\bconfirm your (card|bank|account) (number|details)\b',
         r'የይለፍ ቃል',
+        r'\bcontraseña\b', r'\bmot de passe\b', r'密码', r'验证码', r'पासवर्ड', r'ओटीपी',
     ]),
     'gift_card_or_crypto': (45, [
         r'\bgift ?cards?\b', r'\b(itunes|apple|google play|steam|amazon|ebay) (gift )?cards?\b',
         r'\b(bitcoin|btc|ethereum|eth|usdt|tether|crypto(currency)?)\b',
         r'\bwallet address\b', r'\bwestern union\b', r'\bmoneygram\b',
         r'ስጦታ ካርድ', r'ቢትኮይን', r'ክሪፕቶ',
+        r'\btarjetas? de regalo\b', r'\bcriptomonedas?\b',          # es
+        r'\bcartes? cadeaux?\b', r'\bcryptomonnaies?\b',           # fr
+        r'礼品卡', r'比特币', r'加密货币', r'虚拟货币',                 # zh
+        r'गिफ्ट कार्ड', r'बिटकॉइन', r'बिटकइन', r'क्रिप्टो',              # hi / ne
     ]),
     'overpayment': (50, [
         r'\boverpa(id|yment)\b', r'\brefund the (difference|extra|balance)\b',
@@ -189,8 +202,9 @@ def ai_check(text: str, recipient: str, amount: str, language: str = 'en') -> di
             f'Message or invoice text, between the markers:\n'
             f'<<<MESSAGE\n{text[:MAX_TEXT_CHARS]}\nMESSAGE>>>')
     result = validate_ai_result(ai_provider.chat_json(system, user))
-    if language == 'am' and not re.search(r'[ሀ-፿]', result['explanation']):
-        raise ValueError('AI did not answer in Amharic')
+    script = LANGUAGES[language]['script']
+    if script and not re.search(script, result['explanation']):
+        raise ValueError(f"AI did not answer in {LANGUAGES[language]['ai_name']}")
     return result
 
 
