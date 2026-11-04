@@ -17,6 +17,28 @@ cp .env.example .env              # then add YOUR OWN PayPal sandbox keys
 https://developer.paypal.com → Apps & Credentials → Sandbox → Create App.
 Never share keys in chat, and never paste them into code.
 
+## Project layout: who owns what
+
+QUICK Guard is split into 4 parts. Each part has its own files, so we rarely edit the same file.
+Each file's docstring describes what its functions take and return. If you need to change a
+function's inputs or outputs, talk to that part's owner first.
+
+| Part | Owner | Files |
+|---|---|---|
+| A: PayPal | Yabsera | `guard/paypal.py`, `guard/routes_payments.py`, `guard/store.py`, `tests/test_paypal.py` |
+| B: AI scam check | Yabsera | `guard/ai_provider.py`, `guard/scam_check.py`, `guard/translations.py`, `tests/test_scam_check.py` |
+| C: Location | Yabsera | `guard/location.py`, `static/location.js`, `tests/test_location.py` |
+| D: Risk + dashboard | Yabsera | `guard/risk.py`, `guard/routes.py`, `guard/web.py`, `static/guard.js`, `static/guard.css`, `tests/test_risk.py` |
+
+Shared files (`server.py`, `index.html`): keep changes small and mention them in your PR.
+
+### Running the tests
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+Run them before every pull request.
+
 ## Every time you work on something
 
 ### 1. Start from the latest `main`
