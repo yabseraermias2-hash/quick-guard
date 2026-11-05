@@ -11,10 +11,12 @@
   // (denied, unsupported, or slow) — the server then falls back to IP lookup.
   function getCoords() {
     return new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve(null);
+      api.lastProblem = null;
+      if (!navigator.geolocation) { api.lastProblem = 'unsupported'; return resolve(null); }
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: round(pos.coords.latitude), lon: round(pos.coords.longitude) }),
-        () => resolve(null),
+        // 1 = permission denied, 2 = position unavailable (e.g. OS location off), 3 = timeout
+        (err) => { api.lastProblem = ({ 1: 'denied', 2: 'unavailable', 3: 'timeout' })[err && err.code] || 'unavailable'; resolve(null); },
         { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 }
       );
     });
@@ -31,5 +33,6 @@
     }
   }
 
-  window.QuickLocation = { getCoords, fillDemoSelect };
+  const api = { getCoords, fillDemoSelect, lastProblem: null };
+  window.QuickLocation = api;
 })();

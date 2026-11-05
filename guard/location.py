@@ -56,17 +56,72 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
-def client_ip(request) -> str:
-    """The real client IP, taking Render's proxy (X-Forwarded-For) into account.
+# Proxy hops between the visitor and gunicorn on Render: Render's private
+# network, and Cloudflare (Render sits behind it). Published at
+# https://www.cloudflare.com/ips/ — these ranges change very rarely.
+_PROXY_NETS = [ipaddress.ip_network(n) for n in (
+    '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '100.64.0.0/10',
+    '127.0.0.0/8', '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10',
+    '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+    '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+    '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+    '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+    '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+    '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+)]
+_logged_ip_shape = False
 
-    Only trust X-Forwarded-For behind Render's proxy, and only its LAST entry
-    (the one Render's proxy added). Earlier entries can be faked by the client."""
-    if os.getenv('RENDER'):
-        forwarded = request.headers.get('X-Forwarded-For', '')
-        parts = [p.strip() for p in forwarded.split(',') if p.strip()]
-        if parts:
-            return parts[-1]
+
+def _parse_ip(value: str):
+    try:
+        return ipaddress.ip_address(value.strip())
+    except ValueError:
+        return None
+
+
+def _is_proxy_hop(addr) -> bool:
+    return any(addr in net for net in _PROXY_NETS if net.version == addr.version)
+
+
+def client_ip(request) -> str:
+    """The visitor's real IP behind Render's proxies.
+
+    Render (behind Cloudflare) puts the visitor's IP in X-Forwarded-For and then
+    appends its own proxy hops, which are private 10.x addresses. Taking the LAST
+    entry therefore gave Render's proxy, and the IP lookup skipped it.
+
+    Order:
+    1. CF-Connecting-IP: Cloudflare sets it and overwrites any value a client sends.
+    2. X-Forwarded-For, walked from the right: skip proxy hops (Render's private
+       network, Cloudflare) and take the first other address. Entries further left
+       came from the client and can be faked, so they are never used.
+    Off Render, X-Forwarded-For is ignored and remote_addr is used."""
+    if not os.getenv('RENDER'):
+        return request.remote_addr or ''
+    cf = _parse_ip(request.headers.get('CF-Connecting-IP', ''))
+    parts = [p.strip() for p in request.headers.get('X-Forwarded-For', '').split(',') if p.strip()]
+    _log_ip_shape(cf, parts)
+    if cf and not _is_proxy_hop(cf):
+        return str(cf)
+    for raw in reversed(parts):
+        addr = _parse_ip(raw)
+        if addr and not _is_proxy_hop(addr):
+            return str(addr)
     return request.remote_addr or ''
+
+
+def _log_ip_shape(cf, parts) -> None:
+    """Log once which headers Render sends, without any IP address in the log."""
+    global _logged_ip_shape
+    if _logged_ip_shape:
+        return
+    _logged_ip_shape = True
+    kinds = []
+    for raw in parts:
+        addr = _parse_ip(raw)
+        kinds.append('bad' if not addr else 'proxy' if _is_proxy_hop(addr) else 'public')
+    print(f"[Location] proxy headers: CF-Connecting-IP={'yes' if cf else 'no'}, "
+          f"X-Forwarded-For entries={kinds or 'none'}")
 
 
 def _lookup_ipapi(ip: str) -> dict | None:
@@ -74,6 +129,7 @@ def _lookup_ipapi(ip: str) -> dict | None:
                      headers={'User-Agent': 'QUICK-Guard'})
     d = r.json()
     if r.status_code != 200 or d.get('error') or d.get('latitude') is None:
+        print(f"[Location] ipapi lookup failed: HTTP {r.status_code} {str(d.get('reason') or '')[:40]}")
         return None
     return {'lat': d['latitude'], 'lon': d['longitude'],
             'city': ', '.join(x for x in (d.get('city'), d.get('country_name')) if x)}
@@ -83,6 +139,7 @@ def _lookup_ipwho(ip: str) -> dict | None:
     r = requests.get(f'https://ipwho.is/{ip}', timeout=_IP_TIMEOUT)
     d = r.json()
     if r.status_code != 200 or not d.get('success') or d.get('latitude') is None:
+        print(f"[Location] ipwho lookup failed: HTTP {r.status_code} {str(d.get('message') or '')[:40]}")
         return None
     return {'lat': d['latitude'], 'lon': d['longitude'],
             'city': ', '.join(x for x in (d.get('city'), d.get('country')) if x)}
@@ -104,16 +161,18 @@ def ip_lookup(ip: str) -> dict | None:
     for provider in (_lookup_ipapi, _lookup_ipwho):
         try:
             found = provider(key)
-        except (requests.RequestException, ValueError):
+        except (requests.RequestException, ValueError) as e:
+            print(f'[Location] {provider.__name__[8:]} lookup failed: {type(e).__name__}')
             found = None
         if found:
             lat, lon = round_coords(found['lat'], found['lon'])
             result = {'lat': lat, 'lon': lon, 'city': found['city'] or 'Unknown city'}
             break
-    with _ip_lock:
-        if len(_ip_cache) >= _IP_CACHE_MAX:
-            _ip_cache.clear()
-        _ip_cache[key] = result
+    if result:                      # never cache a failure: a rate limit is temporary
+        with _ip_lock:
+            if len(_ip_cache) >= _IP_CACHE_MAX:
+                _ip_cache.clear()
+            _ip_cache[key] = result
     return result
 
 
