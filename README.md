@@ -112,7 +112,7 @@ Every result shows which model actually answered, or "keyword rules only". Ident
 - **No HTML injection.** Every server value is inserted as plain text.
 - **Hardened cookies.** `HttpOnly`, `SameSite=Lax`, and `Secure` on the live site.
 - **Powerful local tools are off.** QUICK's original desktop tools (chat, code runner, scanners, microphone) return 403 and are hidden on the public site.
-- **Tested.** 232 automated tests, including attack tests: prompt injection, XSS, malformed input, double-capture races, spoofed IP headers.
+- **Tested.** 239 automated tests, including attack tests: prompt injection, XSS, malformed input, double-capture races, spoofed IP headers.
 
 ## Run it locally
 

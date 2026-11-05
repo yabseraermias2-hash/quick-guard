@@ -135,7 +135,7 @@ Past that, checks fall back to keyword rules until the minute resets.
 
 ## 8. Test results
 
-- **232 automated tests pass** (`python -m pytest -q`), including the audit's regression tests and tests for both live bugs below.
+- **239 automated tests pass** (`python -m pytest -q`), including the audit's regression tests and tests for both live bugs below.
 - **Scam accuracy, 40 real messages through the live AI:** 20 normal (including "", "ቡና", emojis, typos)
   → all LOW; 20 scams (fake limits, invoices, support callbacks, gift cards, crypto, overpayment, prizes,
   family emergencies, bad links, 3 in Amharic) → all HIGH. **0 false positives, 0 false negatives, every
