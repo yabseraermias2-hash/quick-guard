@@ -1,39 +1,126 @@
 # QUICK Guard
 
-**An AI guardian that stops PayPal scams before you pay.**
+**An AI guardian that checks a PayPal payment for scams and account takeover *before* any money moves.**
 
-> Built for the PayPal AI Hackathon 2026. Uses the **PayPal Sandbox** only, so no real money ever moves.
+### ▶ Live demo: **https://quick-guard.onrender.com**
+
+> **First load may take up to a minute while the free server wakes up.**
+> Uses the **PayPal Sandbox** only, so no real money ever moves. Built for the PayPal AI Hackathon 2026.
+
+![QUICK Guard blocking a fake "PayPal Security Team" message, with the warning in Amharic](docs/screenshots/scam-blocked-amharic.png)
 
 ## The problem
 
-PayPal's systems are secure, but scammers target the *person*, not the system. Fake invoices, "your account is limited" messages, and fake support calls trick people into sending money themselves. QUICK Guard checks every payment **before** it's sent.
+PayPal's systems are secure, but scammers target the *person*: fake invoices, "your account is limited"
+notices, fake support numbers, "I'm in trouble, don't tell anyone." Victims send the money themselves, so
+fraud systems see a legitimate payment. Many of the people hit hardest are first-time digital-payment users
+who may not read English well, so a warning has to be simple, spoken, and in their own language.
 
-## Our story
+QUICK Guard sits **in front of the PayPal button**. Every payment is checked first, and the server, not
+the browser, decides whether PayPal is even allowed to create the order.
 
-_TODO: our team's roots in Ethiopia, first-time digital payment users, and why warnings need to speak Amharic, not just English._
+## How judges can test it
 
-## Features
+Open **https://quick-guard.onrender.com** on a laptop (Chrome, Edge, Firefox or Safari). Turn your sound on
+to hear the spoken warnings. Tick **DEMO MODE** so the site uses a sample city instead of your real location.
 
-_TODO: filled in as we build_
+### 1. A safe payment (≈ 30 seconds)
+1. Tick **DEMO MODE** and pick **Addis Ababa, Ethiopia**.
+2. Click **Try: safe invoice**, and type any recipient email, e.g. `designer@example.com`.
+3. Click **CHECK WITH QUICK GUARD**.
+4. The orb turns **green**: **LOW RISK · SAFE**, and the PayPal buttons appear.
+5. Click **Pay with PayPal** and log in with the **judge test account** below. After you approve, the
+   payment is captured and appears as **PAID** in Payment history.
 
-- [ ] PayPal sandbox payments (Orders API v2), captured only after QUICK Guard approves
-- [ ] AI scam check of invoice and message text
-- [ ] Location and impossible-travel check
-- [ ] Combined risk engine (LOW / MEDIUM / HIGH)
-- [ ] Voice warnings in English and Amharic
-- [ ] Dashboard with a color-coded orb and payment history
+### 2. A scam blocked (≈ 20 seconds)
+1. Click **Try: scam message** (a fake "PayPal Security Team: your account has been limited…" notice).
+2. Set **Warning language** to **አማርኛ (Amharic)** to hear the warning in Amharic, or leave it in English.
+3. Click **CHECK WITH QUICK GUARD**.
+4. The orb turns **red**: **HIGH RISK · BLOCKED**. Every red flag quotes the exact words that gave the scam
+   away, the warning is spoken aloud, and **no PayPal buttons are shown**. The server also refuses to
+   create a PayPal order for this check, even if someone calls the API directly.
 
-## Live demo
+### 3. Impossible travel (≈ 1 minute; do test 1 first)
+1. Complete test 1, a real sandbox payment from **Addis Ababa**. That city is now your trusted location.
+2. In DEMO MODE, switch the city to **Tokyo, Japan**.
+3. Click **Try: safe invoice** again and **CHECK WITH QUICK GUARD**.
+4. Result: **HIGH RISK · BLOCKED**. The message is harmless, but getting from Addis Ababa to Tokyo in a few
+   minutes would mean traveling at hundreds of thousands of km/h, so it looks like someone else is using
+   the account.
 
-_TODO: Render URL_
+You can also paste any message you've received into the box and see what QUICK Guard says. Warnings are
+available in English, Amharic, Spanish, French, Mandarin, Hindi and Nepali.
 
-## Setup (run it yourself)
+### Judge test account
 
-You need **Python 3.13** and **git**. 3.13 is the version the live demo runs on Render (pinned in `.python-version`), so use it locally too.
+Use this **PayPal Sandbox** buyer account in the PayPal popup. It holds fake sandbox money only.
+
+| | |
+|---|---|
+| Sandbox buyer email | `[FILL IN: sandbox buyer email]` |
+| Sandbox buyer password | `[FILL IN: sandbox buyer password]` |
+
+## Screenshots
+
+All taken on the live site with DEMO MODE on.
+
+| Safe payment → PayPal buttons | Scam blocked |
+|---|---|
+| ![LOW risk, PayPal buttons shown](docs/screenshots/safe-payment.png) | ![HIGH risk, blocked, red flags quoted](docs/screenshots/scam-blocked.png) |
+
+## How it works
+
+```
+ amount, recipient, message ─► POST /api/guard/check
+ (+ city-level location)         ├─ scam check: keyword rules (7 languages)  ┐
+                                 ├─ scam check: AI (Groq)                    ├─► risk engine ─► LOW / MEDIUM / HIGH
+                                 └─ location vs last trusted city ───────────┘
+ LOW            ─► PayPal buttons shown
+ MEDIUM         ─► "Yes, this is me" ─► PayPal buttons shown
+ HIGH           ─► blocked: no buttons, and the server refuses to create an order
+ PayPal button  ─► POST /api/paypal/order (re-checked) ─► buyer approves ─► POST /api/paypal/capture (re-checked)
+```
+
+- **Risk score** = the higher of the scam score and the location score. LOW < 40 ≤ MEDIUM < 70 ≤ HIGH.
+  If the scam score and the location score are both ≥ 40, the result is always HIGH.
+- **Impossible travel:** faster than 900 km/h since the last trusted payment = 90 points (HIGH);
+  500–900 km/h = 50 points (MEDIUM).
+- **Evidence rule:** every red flag must quote words that are really in the message. The AI may raise a
+  payment to MEDIUM or HIGH only if one of its quotes checks out, and it can never *lower* the keyword score.
+
+### Which AI we use
+
+| Layer | What |
+|---|---|
+| Main model | **Groq, `openai/gpt-oss-120b`** (OpenAI's open-weight model, low reasoning effort, strict JSON output) |
+| Backup model | **Groq, `openai/gpt-oss-20b`**, used automatically when the first model hits the free-tier rate limit |
+| Fallback | **Keyword rules** in 7 languages, which always run. If the AI is down, Guard still protects with these alone. |
+
+Every result shows which model actually answered, or "keyword rules only". Identical messages within
+10 minutes reuse the cached answer. For local development, `AI_PROVIDER=ollama` runs Llama 3 on your own machine.
+
+## Security features
+
+- **PayPal Sandbox only.** The server refuses to start unless `PAYPAL_MODE=sandbox`, and there is no live PayPal URL in the code.
+- **The server is the gate.** Creating and capturing an order both re-check the saved result. A HIGH or unconfirmed MEDIUM payment can't be paid, even by calling the API directly.
+- **No double payments.** Capture claims the check atomically before calling PayPal, and PayPal's `PayPal-Request-Id` makes the capture idempotent.
+- **Secrets stay secret.** Keys live only in `.env` (local) or Render environment variables. The app's logs never contain keys, tokens, full payment bodies or IP addresses.
+- **Privacy.** Location is rounded to about 11 km the moment it arrives, and exact GPS is never stored. Nothing is written to disk: checks and history live in memory and expire.
+- **Prompt-injection resistant.** Message text is fenced and labeled as data for the AI. Trying to talk the checker into "safe" adds +40 risk. AI flags that don't quote the message are dropped.
+- **Input validation.** Amount 0.01–10,000.00 USD; strict email format; message ≤ 5,000 characters; request bodies ≤ 256 KB.
+- **Rate limiting.** 30 checks per 10 minutes, per browser session and per visitor IP (the real IP behind Render's and Cloudflare's proxies, which can't be faked by headers).
+- **No HTML injection.** Every server value is inserted as plain text.
+- **Hardened cookies.** `HttpOnly`, `SameSite=Lax`, and `Secure` on the live site.
+- **Powerful local tools are off.** QUICK's original desktop tools (chat, code runner, scanners, microphone) return 403 and are hidden on the public site.
+- **Tested.** 232 automated tests, including attack tests: prompt injection, XSS, malformed input, double-capture races, spoofed IP headers.
+
+## Run it locally
+
+You need **Python 3.13** (the version the live site runs, pinned in `.python-version`) and **git**.
 
 ```bash
 # 1. Clone
-git clone https://github.com/<owner>/quick-guard.git
+git clone https://github.com/yabseraermias2-hash/quick-guard.git
 cd quick-guard
 
 # 2. Create and activate a virtual environment
@@ -42,52 +129,37 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 
 # 3. Install packages
 pip install -r requirements.txt
-# Optional: QUICK's extra local tools (mic, memory, scanners)
-# pip install -r requirements-local.txt
 
 # 4. Add your settings
 cp .env.example .env
-# then open .env and paste in your own PayPal *sandbox* keys
+# then open .env and add your PayPal *sandbox* Client ID and Secret
+# (developer.paypal.com → Apps & Credentials → Sandbox) and a Groq API key (console.groq.com)
 
-# 5. Run
+# 5. Check your Groq key (optional), then run
+python scripts/check_groq.py
 python server.py
 ```
 
-Then open the `http://localhost:PORT` address the server prints.
+Then open the `http://localhost:PORT` address the server prints. Run the tests with
+`pip install -r requirements-dev.txt` and `python -m pytest -q`.
 
-### AI provider
+**AI provider:** set `AI_PROVIDER=groq` (default model `openai/gpt-oss-120b`, backup `openai/gpt-oss-20b`)
+or `AI_PROVIDER=ollama` to use a local Llama 3 (`ollama pull llama3`).
 
-Set `AI_PROVIDER` in `.env`:
-- `ollama`: local Llama 3. Install [Ollama](https://ollama.com) and run `ollama pull llama3`.
-- `groq`: hosted model on [Groq](https://console.groq.com) (used by the live demo). Default `openai/gpt-oss-120b`,
-  falling back to `openai/gpt-oss-20b` when the free-tier rate limit is hit. Free Groq keys can't use Llama models.
-  Put your key in `.env` as `GROQ_API_KEY`, then run `python scripts/check_groq.py` to confirm it works.
+**Deploying:** `render.yaml` is a Render Blueprint. In Render choose New → Blueprint, pick this repo,
+and paste `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and `GROQ_API_KEY` when asked.
 
-## How judges can test it
+## Built with
 
-_TODO: sandbox test accounts, a safe payment, a scam invoice, and an impossible-travel demo_
+Python · Flask · Gunicorn · PayPal Orders API v2 and JavaScript SDK (Sandbox) · Groq (`gpt-oss-120b` / `gpt-oss-20b`) ·
+Ollama (local development) · Microsoft Edge neural voices (`edge-tts`) · Render · pytest · Playwright · Claude Code
 
-## How we built it
-
-_TODO: architecture, and which AI tools we used and how_
-
-## Security and privacy
-
-- PayPal **sandbox** URLs only. Secrets live in `.env` / Render environment variables, never in code.
-- Location is stored at city level or as rounded coordinates, never exact GPS.
-- QUICK's original power tools (code runner, scanners, OSINT, uploads) are **off by default** (`ENABLE_QUICK_TOOLS=false`) and are never enabled on the public site.
-
-## Screenshots
-
-_TODO_
-
-## Team
-
-- Yab (Yabsera Kebede)
-- Same Dawit
-- Ismail Ishek
-- Nahom Tefera
+More detail: [QUICK_GUARD_BRIEF.md](QUICK_GUARD_BRIEF.md).
 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+**Built by Yabsera Kebede.**
