@@ -91,8 +91,20 @@ def check_for_order(session_id: str, order_id: str) -> dict | None:
     return None
 
 
+def begin_capture(session_id: str, check_id: str) -> bool:
+    """Atomically move a live check from 'checked' to 'capturing'.
+    Returns False if it is already capturing, captured, blocked or gone."""
+    with _lock:
+        check = _live_check(_session(session_id), check_id)
+        if not check or check['status'] != 'checked':
+            return False
+        check['status'] = 'capturing'
+        return True
+
+
 def set_status(session_id: str, check_id: str, status: str) -> None:
-    """'checked' → 'captured' | 'blocked'."""
+    """'checked' → 'capturing' → 'captured' (or back to 'checked' if PayPal
+    fails), or 'checked' → 'blocked'."""
     with _lock:
         check = _session(session_id)['checks'].get(check_id)
         if check:

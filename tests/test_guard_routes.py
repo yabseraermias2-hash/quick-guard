@@ -65,7 +65,8 @@ def test_amharic_explanation_and_voice(client):
 
 def test_medium_flow_requires_confirm(client, monkeypatch):
     monkeypatch.setattr(ai_provider, 'chat_json', lambda *a, **kw: {
-        'scam_score': 50, 'red_flags': ['Unusual request'], 'explanation': 'Be careful.'})
+        'scam_score': 50, 'red_flags': [{'quote': 'Thanks for dinner', 'why': 'Unusual request'}],
+        'explanation': 'Be careful.'})
     r = check(client).get_json()
     assert r['level'] == 'MEDIUM'
     assert client.post('/api/paypal/order', json={'check_id': r['check_id']}).status_code == 403
