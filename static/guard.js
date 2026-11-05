@@ -59,7 +59,7 @@
       const resp = await fetch('/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice }),
+        body: JSON.stringify({ text: (text || '').slice(0, 1500), voice }),   // server refuses longer text
       });
       if (!resp.ok) throw new Error('tts ' + resp.status);
       const url = URL.createObjectURL(await resp.blob());
@@ -137,7 +137,8 @@
     $('gLevel').textContent = LEVEL_TEXT[r.level];
     $('gScoreBar').style.width = Math.max(3, r.score) + '%';
     $('gScoreText').textContent =
-      `Risk ${r.score}/100 · scam check ${r.scam.score}/100 (${r.scam.source === 'keywords' ? 'keyword rules' : 'AI + keyword rules'})`;
+      `Risk ${r.score}/100 · scam check ${r.scam.score}/100 (` +
+      (r.scam.model ? `AI: ${r.scam.model} + keyword rules` : 'keyword rules only') + ')';
     $('gExplanation').textContent = r.explanation;
 
     const flags = $('gFlags');
@@ -255,6 +256,12 @@
       window.QuickLocation.fillDemoSelect($('gDemoCity'), config.demo_cities);
       $('gDemoOn').addEventListener('change', (e) => { $('gDemoCity').disabled = !e.target.checked; });
     }
+
+    // The status bar shows the AI that QUICK Guard really uses (Groq on the
+    // deployed site), not whatever local Ollama model happens to be installed.
+    if (config.ai && typeof window.setGuardBrain === 'function') window.setGuardBrain(config.ai.label);
+    if (typeof window.setVoiceInputAllowed === 'function') window.setVoiceInputAllowed(config.tools_enabled);
+    if (typeof window.setChatAllowed === 'function') window.setChatAllowed(config.tools_enabled);
 
     setupTabs(config.tools_enabled);
     document.querySelectorAll('[data-sample]').forEach((b) => b.addEventListener('click', () => {

@@ -20,7 +20,8 @@ _TOKEN_EARLY_REFRESH = 60     # refresh the token this many seconds before it ex
 _MAX_DESCRIPTION = 127        # PayPal's limit for purchase_units[].description
 
 _AMOUNT_RE = re.compile(r'^\d{1,5}\.\d{2}$')
-_EMAIL_RE = re.compile(r'^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$')
+from .web import EMAIL_RE  # noqa: E402
+_EMAIL_RE = re.compile(EMAIL_RE)
 _ORDER_ID_RE = re.compile(r'^[A-Z0-9]{10,30}$')
 
 _token_lock = threading.Lock()

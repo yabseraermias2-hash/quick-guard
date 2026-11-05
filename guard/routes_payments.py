@@ -13,7 +13,7 @@ from flask import Blueprint, jsonify, request
 
 from . import paypal, store
 from .risk import LOW, MEDIUM
-from .web import session_id
+from .web import json_body, session_id
 
 bp = Blueprint('paypal', __name__, url_prefix='/api/paypal')
 
@@ -22,6 +22,8 @@ def approval_problem(check: dict) -> str | None:
     """Why this check may NOT be paid, or None if it's approved."""
     if check['status'] == 'captured':
         return 'This payment was already completed.'
+    if check['status'] == 'capturing':
+        return 'This payment is already being completed.'
     if check['level'] == LOW:
         return None
     if check['level'] == MEDIUM and check['confirmed']:
@@ -32,8 +34,8 @@ def approval_problem(check: dict) -> str | None:
 
 
 def _body_str(key: str, limit: int = 64) -> str:
-    data = request.get_json(silent=True) or {}
-    return str(data.get(key) or '')[:limit]
+    value = json_body().get(key)
+    return value[:limit] if isinstance(value, str) else ''
 
 
 @bp.post('/order')
@@ -64,9 +66,14 @@ def capture():
     problem = approval_problem(check)  # check again: never trust the browser
     if problem:
         return jsonify({'error': problem}), 403
+    # Claim the check atomically, so two capture requests sent at the same
+    # moment can't both get past the check above (no double payment).
+    if not store.begin_capture(sid, check['check_id']):
+        return jsonify({'error': 'This payment is already being completed.'}), 409
     try:
         result = paypal.capture_order(order_id)
     except paypal.PayPalError as e:
+        store.set_status(sid, check['check_id'], 'checked')   # let the user try again
         return jsonify({'error': str(e), 'issue': e.issue}), 422 if e.issue else 502
 
     now = time.time()
