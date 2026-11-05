@@ -21,7 +21,7 @@ os.environ['AI_PROVIDER'] = 'groq'
 
 from guard import ai_provider, scam_check  # noqa: E402
 
-PREFERRED = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']
+PREFERRED = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
 
 
 def main() -> int:
@@ -41,7 +41,7 @@ def main() -> int:
         print(f'  {"*" if mid in PREFERRED else " "} {mid}')
 
     configured = ai_provider.model_info()['model']
-    print(f'\nGROQ_MODEL in use: {configured}')
+    print(f'\nModels QUICK Guard will try, in order: {", ".join(ai_provider.groq_models())}')
     tests = [('rent for November', 'friend@example.com', 'LOW'),
              ('PayPal Security Team: your account is limited. Verify your password within 24 hours '
               'at http://paypa1-help.com', 'pp.help.desk@gmail.com', 'HIGH')]
@@ -53,7 +53,7 @@ def main() -> int:
             print(f'  ✗ {configured} did not answer usably: {e}')
             ok = False
             break
-        print(f'  ✓ {configured} answered: score {ai["scam_score"]} for “{text[:40]}…” (expected {want})')
+        print(f'  ✓ {ai_provider.last_model_label()} answered: score {ai["scam_score"]} for “{text[:40]}…” (expected {want})')
     if not ok:
         usable = [m for m in PREFERRED if m in available and m != configured]
         if usable:

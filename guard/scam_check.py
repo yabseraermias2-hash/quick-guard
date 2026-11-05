@@ -5,8 +5,12 @@ Security rule: the keyword check ALWAYS runs, and the final scam_score is the
 higher of the keyword score and the AI score. A scam message that tries to
 talk the AI into "score 0" can never drop below what the keywords found.
 """
+import hashlib
 import math
 import re
+import threading
+import time
+from collections import OrderedDict
 
 from . import ai_provider
 from .risk import MEDIUM_AT
@@ -304,6 +308,34 @@ def ai_check(text: str, recipient: str, amount: str, language: str = 'en') -> di
     return result
 
 
+# Same message checked again within 10 minutes (judges re-running a sample)
+# reuses the AI answer instead of spending the free Groq budget again.
+AI_CACHE_SECONDS = 10 * 60
+AI_CACHE_MAX = 256
+_ai_cache: OrderedDict = OrderedDict()
+_ai_cache_lock = threading.Lock()
+
+
+def _cached_ai_check(text: str, recipient: str, amount: str, language: str) -> tuple[dict, str | None]:
+    """ai_check() with a small in-memory cache. Returns (result, model label)."""
+    key = hashlib.sha256('\x00'.join((ai_provider.provider_name(), text, recipient, amount, language))
+                         .encode()).hexdigest()
+    now = time.time()
+    with _ai_cache_lock:
+        hit = _ai_cache.get(key)
+        if hit and now - hit[0] < AI_CACHE_SECONDS:
+            _ai_cache.move_to_end(key)
+            return hit[1], hit[2]
+    ai_provider._last.label = None
+    result = ai_check(text, recipient, amount, language)
+    model = ai_provider.last_model_label() or ai_provider.model_info()['label']
+    with _ai_cache_lock:
+        _ai_cache[key] = (now, result, model)
+        while len(_ai_cache) > AI_CACHE_MAX:
+            _ai_cache.popitem(last=False)
+    return result, model
+
+
 def check(text: str, recipient: str, amount: str, language: str = 'en') -> dict:
     """Run keyword + AI and merge them.
 
@@ -318,9 +350,8 @@ def check(text: str, recipient: str, amount: str, language: str = 'en') -> dict:
     kw = {**keyword_check(text, language, recipient), 'model': None}
     if not text.strip():
         return kw
-    model = ai_provider.model_info()['label']   # read before the call, so it matches what answered
     try:
-        ai = ai_check(text, recipient, amount, language)
+        ai, model = _cached_ai_check(text, recipient, amount, language)
     except (ai_provider.AIError, ValueError) as e:
         print(f'[Guard] AI check unavailable, using keywords only: {e}')
         return kw

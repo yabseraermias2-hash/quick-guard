@@ -28,7 +28,9 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile   # change if scripts/check_groq.py says your key can't use it
+        value: openai/gpt-oss-120b      # free Groq keys can't use Llama models; check with scripts/check_groq.py
+      - key: GROQ_FALLBACK_MODEL
+        value: openai/gpt-oss-20b       # used when the first model hits the free-tier rate limit
       # ── QUICK Guard ──
       - key: SECRET_KEY
         generateValue: true             # Render makes a random one; sessions survive restarts
