@@ -261,6 +261,7 @@
     // deployed site), not whatever local Ollama model happens to be installed.
     if (config.ai && typeof window.setGuardBrain === 'function') window.setGuardBrain(config.ai.label);
     if (typeof window.setVoiceInputAllowed === 'function') window.setVoiceInputAllowed(config.tools_enabled);
+    if (typeof window.setChatAllowed === 'function') window.setChatAllowed(config.tools_enabled);
 
     setupTabs(config.tools_enabled);
     document.querySelectorAll('[data-sample]').forEach((b) => b.addEventListener('click', () => {

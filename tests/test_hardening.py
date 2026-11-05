@@ -253,3 +253,16 @@ def test_same_message_is_answered_from_cache(monkeypatch):
 
 
 _real_chat_json = ai_provider.chat_json
+
+
+# ── QUICK's chat is local-only ────────────────────────────────────
+
+@pytest.mark.parametrize('path', ['/chat', '/chat/stream'])
+def test_chat_is_blocked_when_tools_are_off(client, path):
+    r = client.post(path, json={'message': 'hi'})
+    assert r.status_code == 403 and 'disabled' in r.get_json()['error']
+
+
+def test_chat_box_starts_hidden_on_the_page(client):
+    page = client.get('/').get_data(as_text=True)
+    assert '<div class="app no-chat">' in page and '.app.no-chat .chat-area { display:none; }' in page

@@ -431,6 +431,12 @@
     .chat-area.drag-over { outline:2px dashed var(--accent); outline-offset:-4px; }
 
 
+    /* Public QUICK Guard site (ENABLE_QUICK_TOOLS=false): QUICK's chat needs a
+       local Ollama, so it's hidden and the orb takes the whole center column.
+       The class starts on and is only removed when the server says tools are on. */
+    .app.no-chat .chat-area { display:none; }
+    .app.no-chat .orb-section { flex:1; height:auto; border-bottom:none; }
+
     /* ── Responsive ── */
     @media (max-width:900px) {
       .left-panel, .right-panel { display:none; }
@@ -478,7 +484,7 @@
   <span id="healthBannerMsg">QUICK is reconnecting — Ollama may be down. Retrying...</span>
 </div>
 
-<div class="app">
+<div class="app no-chat">
 
   <!-- ── Left Panel: Reports ── -->
   <aside class="panel left-panel">
@@ -1340,6 +1346,11 @@ let _wakeDisabled = false;   // set when mic permission is denied
 // not on load, not when the tab regains focus, not after the voice speaks
 // (which says "QUICK Guard…" and used to trigger the "quick" wake word).
 let _voiceInputAllowed = false;
+window.setChatAllowed = (allowed) => {
+  document.querySelector('.app').classList.toggle('no-chat', !allowed);
+  if (typeof resize === 'function') resize();   // the orb canvas changed size
+};
+
 window.setVoiceInputAllowed = (allowed) => {
   _voiceInputAllowed = !!allowed && !!SpeechRec;
   const btn = document.getElementById('micBtn');

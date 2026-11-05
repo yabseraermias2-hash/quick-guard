@@ -106,7 +106,7 @@ keyword score, plus 40 points for trying to manipulate the checker.
 - **Rate limit:** 30 checks per 10 minutes, per session and per IP.
 - **No HTML injection.** Every server value is inserted as text (`textContent`), and the chat renderer escapes everything before formatting.
 - **Cookies** are `HttpOnly` and `SameSite=Lax`, plus `Secure` on Render.
-- **QUICK's original power tools** (code runner, scanners, uploads, monitoring, microphone) are off unless `ENABLE_QUICK_TOOLS=true`, which is never set on the public site. With it off, those routes return 403, and the microphone can never switch on, not even from the wake word.
+- **QUICK's original power tools** (chat, code runner, scanners, uploads, monitoring, microphone) are off unless `ENABLE_QUICK_TOOLS=true`, which is never set on the public site. With it off, those routes return 403, and the microphone can never switch on, not even from the wake word.
 
 ## 6. Languages and voice
 
@@ -151,4 +151,4 @@ Past that, checks fall back to keyword rules until the minute resets.
 - State is in memory: a Render restart or redeploy clears checks and history, and the app must run as a single process.
 - The free Render plan sleeps when idle, so the first visit after a while takes ~30–60 s to wake.
 - IP location is city-level and can be wrong (VPNs, mobile networks). That's why travel only adds risk and never blocks on its own unless it's physically impossible.
-- QUICK's original chat (`/chat`) needs a local Ollama and is not available on the deployed site.
+- QUICK's original chat (`/chat`) needs a local Ollama, so on the deployed site it returns 403 and the chat box is hidden.

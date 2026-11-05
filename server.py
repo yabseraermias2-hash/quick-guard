@@ -714,6 +714,7 @@ def events():
 
 
 @app.route('/chat', methods=['POST'])
+@local_only   # needs a local Ollama, so it's off on the public site
 def chat():
     data = json_body()
     message   = data.get('message') if isinstance(data.get('message'), str) else ''
@@ -748,6 +749,7 @@ def chat():
 
 
 @app.route('/chat/stream', methods=['POST'])
+@local_only
 def chat_stream():
     data      = json_body()
     message   = data.get('message') if isinstance(data.get('message'), str) else ''
