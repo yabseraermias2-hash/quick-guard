@@ -184,6 +184,7 @@ def history():
 def config():
     return jsonify({
         'paypal_client_id': paypal.client_id(),
+        'paypal_problem': paypal.client_id_problem(),
         'demo_mode': location.demo_mode(),
         'demo_cities': location.DEMO_CITIES if location.demo_mode() else {},
         # a list, not a dict: JSON key sorting would put Amharic before English

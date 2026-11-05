@@ -266,3 +266,41 @@ def test_chat_is_blocked_when_tools_are_off(client, path):
 def test_chat_box_starts_hidden_on_the_page(client):
     page = client.get('/').get_data(as_text=True)
     assert '<div class="app no-chat">' in page and '.app.no-chat .chat-area { display:none; }' in page
+
+
+# ── PAYPAL_CLIENT_ID pasted wrong on Render (live bug: SDK returned HTTP 400) ──
+
+from guard import paypal as _pp
+
+
+@pytest.mark.parametrize('value', ['abc-123_XYZ' * 8, '  ' + 'A' * 80 + '\n', '"' + 'A' * 80 + '"'])
+def test_client_id_accepts_real_ids_and_paste_extras(monkeypatch, value):
+    monkeypatch.setenv('PAYPAL_CLIENT_ID', value)
+    assert _pp.client_id_problem() is None
+    assert _pp.client_id() == value.strip().strip('"')
+
+
+@pytest.mark.parametrize('value, hint', [
+    ('sb-buyer12345@personal.example.com', 'email address'),
+    ('A' * 40 + ' ' + 'B' * 40, 'does not look like'),
+    ('', 'not set'),
+])
+def test_client_id_rejects_wrong_values_without_echoing_them(monkeypatch, value, hint):
+    monkeypatch.setenv('PAYPAL_CLIENT_ID', value)
+    problem = _pp.client_id_problem()
+    assert hint in problem
+    assert _pp.client_id() == ''
+    if value:
+        assert value not in problem
+
+
+def test_config_and_health_report_bad_client_id_safely(client, monkeypatch):
+    bad = 'sb-buyer12345@personal.example.com'
+    monkeypatch.setenv('PAYPAL_CLIENT_ID', bad)
+    cfg = client.get('/api/guard/config').get_json()
+    assert cfg['paypal_client_id'] == ''
+    assert 'email address' in cfg['paypal_problem']
+    health = client.get('/health')
+    assert health.status_code == 200
+    assert health.get_json()['paypal_client_id'] == 'invalid'
+    assert bad not in health.get_data(as_text=True) + str(cfg)

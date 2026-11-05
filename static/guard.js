@@ -91,12 +91,12 @@
   function loadPayPal() {
     if (paypalReady) return paypalReady;
     paypalReady = new Promise((resolve, reject) => {
-      if (!config.paypal_client_id) return reject(new Error('PayPal sandbox client ID is not set on the server.'));
+      if (!config.paypal_client_id) return reject(new Error(config.paypal_problem || 'PayPal sandbox client ID is not set on the server.'));
       const s = document.createElement('script');
       s.src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(config.paypal_client_id) +
               '&currency=USD&intent=capture&components=buttons';
       s.onload = () => resolve(window.paypal);
-      s.onerror = () => { paypalReady = null; reject(new Error('Could not load PayPal.')); };
+      s.onerror = () => { paypalReady = null; reject(new Error('Could not load PayPal. Check your connection, or that PAYPAL_CLIENT_ID on the server is the sandbox Client ID.')); };
       document.head.appendChild(s);
     });
     return paypalReady;
