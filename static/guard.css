@@ -83,5 +83,7 @@
   .app { grid-template-areas:"left" "right" "main"; grid-template-columns:1fr; grid-template-rows:auto; height:auto; }
   .left-panel, .right-panel { display:flex; border:none; border-bottom:1px solid var(--border); }
   .main-area { height:70vh; }
+  .app.no-chat .main-area { height:auto; }
+  .app.no-chat .orb-section { flex:none; height:200px; }
   .tab-pane { overflow:visible; }
 }
