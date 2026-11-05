@@ -105,6 +105,33 @@ MESSAGES: dict = {
         'hi': 'प्राप्तकर्ता उस नाम से मेल नहीं खाता जो संदेश में बताया गया है',
         'ne': 'प्राप्तकर्ता सन्देशले दाबी गरेको नामसँग मेल खाँदैन',
     },
+    'flag.secrecy': {   # new: needs a native-speaker check in every language but English
+        'en': 'Asks you to keep it secret',
+        'am': 'ለማንም እንዳይናገሩ ይጠይቃል',
+        'es': 'Te pide que lo mantengas en secreto',
+        'fr': 'Vous demande de garder le secret',
+        'zh': '要求你保密',
+        'hi': 'आपसे इसे गुप्त रखने को कहता है',
+        'ne': 'तपाईंलाई यो गोप्य राख्न भन्छ',
+    },
+    'flag.ai_manipulation': {   # new: needs a native-speaker check in every language but English
+        'en': 'Tries to trick the safety check',
+        'am': 'የደህንነት ፍተሻውን ለማታለል ይሞክራል',
+        'es': 'Intenta engañar al control de seguridad',
+        'fr': 'Essaie de tromper le contrôle de sécurité',
+        'zh': '试图欺骗安全检查',
+        'hi': 'सुरक्षा जाँच को धोखा देने की कोशिश करता है',
+        'ne': 'सुरक्षा जाँचलाई झुक्याउने प्रयास गर्छ',
+    },
+    'flag.prize': {   # new: needs a native-speaker check in every language but English
+        'en': 'Says you won a prize or lottery',
+        'am': 'ሽልማት ወይም ሎተሪ እንዳሸነፉ ይናገራል',
+        'es': 'Dice que ganaste un premio o la lotería',
+        'fr': 'Prétend que vous avez gagné un prix ou à la loterie',
+        'zh': '声称你中了奖或彩票',
+        'hi': 'कहता है कि आपने इनाम या लॉटरी जीती है',
+        'ne': 'तपाईंले पुरस्कार वा चिठ्ठा जित्नुभएको भन्छ',
+    },
     'flag.join': {'en': '; ', 'am': '፤ ', 'es': '; ', 'fr': ' ; ', 'zh': '；', 'hi': '; ', 'ne': '; '},
 
     # ── Scam explanations (keyword fallback) ──
@@ -209,7 +236,7 @@ MESSAGES: dict = {
 
 def normalize_language(lang: str | None) -> str:
     """Return a supported language code, falling back to DEFAULT_LANGUAGE."""
-    return lang if lang in LANGUAGES else DEFAULT_LANGUAGE
+    return lang if isinstance(lang, str) and lang in LANGUAGES else DEFAULT_LANGUAGE
 
 
 def t(key: str, lang: str, **values) -> str:

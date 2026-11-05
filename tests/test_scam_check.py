@@ -65,15 +65,30 @@ def test_amharic_keywords_and_amharic_flags():
     assert any('ስጦታ' in f for f in r['red_flags'])
 
 
+@pytest.mark.parametrize('lang,text', [
+    ('am', 'ወንድምህ ነኝ፣ አደጋ ደርሶብኛል። አስቸኳይ ገንዘብ በቢትኮይን ላክልኝ፣ ለማንም አትናገር።'),
+    ('en', "Grandma it's me, I'm in trouble. Send it urgently in bitcoin and don't tell mom."),
+])
+def test_secret_family_emergency_is_high_without_ai(lang, text):
+    r = scam_check.keyword_check(text, lang, 'new.number@gmail.com')
+    assert 'secrecy' in r['categories'] and r['scam_score'] >= 70
+
+
+@pytest.mark.parametrize('text', ['Splitting the cabin between us', 'Thanks for keeping the secret santa gift a surprise!'])
+def test_secrecy_rule_ignores_normal_notes(text):
+    assert 'secrecy' not in scam_check.keyword_check(text)['categories']
+
+
 # ── AI path ───────────────────────────────────────────────────────
 
 def test_ai_result_is_used_and_merged(monkeypatch):
-    fake_ai(monkeypatch, {'scam_score': 92, 'red_flags': ['Fake PayPal email'],
+    fake_ai(monkeypatch, {'scam_score': 92,
+                          'red_flags': [{'quote': 'or it will be closed', 'why': 'Fake PayPal email'}],
                           'explanation': 'This is a classic fake PayPal message.'})
     r = scam_check.check(FAKE_LIMITED, 'x@gmail.com', '50.00')
     assert r['source'] == 'ai+keywords'
     assert r['scam_score'] == max(92, scam_check.keyword_check(FAKE_LIMITED, 'en', 'x@gmail.com')['scam_score'])
-    assert 'Fake PayPal email' in r['red_flags']
+    assert 'Fake PayPal email: “or it will be closed”' in r['red_flags']
     assert r['explanation'] == 'This is a classic fake PayPal message.'
 
 
@@ -88,8 +103,42 @@ def test_prompt_injection_cannot_lower_the_score(monkeypatch):
 
 
 def test_ai_can_raise_but_not_lower(monkeypatch):
-    fake_ai(monkeypatch, {'scam_score': 75, 'red_flags': ['Unusual request'], 'explanation': 'Suspicious.'})
+    fake_ai(monkeypatch, {'scam_score': 75, 'red_flags': [{'quote': 'booking the table', 'why': 'Unusual request'}],
+                          'explanation': 'Suspicious.'})
     assert scam_check.check(SAFE, 'friend@example.com', '20.00')['scam_score'] == 75
+
+
+# ── Evidence: red flags must quote the message ─────────────────────
+
+def test_keyword_flags_quote_the_message():
+    r = scam_check.keyword_check(FAKE_LIMITED, 'en', 'x@gmail.com')
+    assert r['red_flags']
+    for f in r['red_flags']:
+        assert scam_check.flag_is_grounded(f, FAKE_LIMITED), f
+
+
+def test_invented_ai_flags_are_dropped(monkeypatch):
+    fake_ai(monkeypatch, {'scam_score': 92, 'red_flags': [
+        {'quote': 'send bitcoin now', 'why': 'Crypto request'},     # not in the message
+        'Fake PayPal email',                                         # quotes nothing
+        {'quote': 'within 24 hours', 'why': 'Deadline pressure'}],  # real words
+        'explanation': 'Scam.'})
+    flags = scam_check.check(FAKE_LIMITED, 'x@gmail.com', '50.00')['red_flags']
+    assert all(scam_check.flag_is_grounded(f, FAKE_LIMITED) for f in flags)
+    assert not any('bitcoin' in f or f == 'Fake PayPal email' for f in flags)
+
+
+@pytest.mark.parametrize('flags', [[], ['false urgency'], [{'quote': 'አንተ አንተ', 'why': 'x'}]])
+def test_ai_cannot_raise_the_score_without_quoting_the_message(monkeypatch, flags):
+    """A confused model said 'ቡና' (coffee) was 80/100 with made-up flags."""
+    fake_ai(monkeypatch, {'scam_score': 80, 'red_flags': flags, 'explanation': 'ማጭበርበር ነው።'})
+    r = scam_check.check('ቡና', 'friend@example.com', '5.00', language='am')
+    assert r['scam_score'] < 40 and r['source'] == 'keywords'
+
+
+def test_quotes_ignore_case_and_spacing():
+    assert scam_check.flag_is_grounded('x: “WITHIN  24 hours”', 'Pay within 24 Hours.')
+    assert not scam_check.flag_is_grounded('x: “within 48 hours”', 'Pay within 24 hours.')
 
 
 @pytest.mark.parametrize('raw', [

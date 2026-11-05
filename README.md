@@ -29,7 +29,7 @@ _TODO: Render URL_
 
 ## Setup (run it yourself)
 
-You need **Python 3.12 or 3.13** and **git**.
+You need **Python 3.13** and **git**. 3.13 is the version the live demo runs on Render (pinned in `.python-version`), so use it locally too.
 
 ```bash
 # 1. Clone
@@ -37,7 +37,7 @@ git clone https://github.com/<owner>/quick-guard.git
 cd quick-guard
 
 # 2. Create and activate a virtual environment
-python3 -m venv venv
+python3.13 -m venv venv           # Windows: py -3.13 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 
 # 3. Install packages

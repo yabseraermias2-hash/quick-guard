@@ -29,6 +29,16 @@ def provider_name() -> str:
     return p if p in ('ollama', 'groq') else 'ollama'
 
 
+def model_info() -> dict:
+    """Which AI model a check will use right now, for showing in the UI.
+    Returns {'provider': 'groq' | 'ollama', 'model': str, 'label': str}."""
+    if provider_name() == 'groq':
+        model = os.getenv('GROQ_MODEL', DEFAULT_GROQ_MODEL).strip() or DEFAULT_GROQ_MODEL
+        return {'provider': 'groq', 'model': model, 'label': f'Groq · {model}'}
+    model = os.getenv('OLLAMA_MODEL', DEFAULT_OLLAMA_MODEL).strip() or DEFAULT_OLLAMA_MODEL
+    return {'provider': 'ollama', 'model': model, 'label': f'Ollama · {model} (local)'}
+
+
 def _ollama_url() -> str:
     """Plain HTTP is only allowed to this computer; anything remote must be HTTPS."""
     url = os.getenv('OLLAMA_URL', DEFAULT_OLLAMA_URL).strip().rstrip('/')

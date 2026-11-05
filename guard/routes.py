@@ -12,7 +12,8 @@ POST /api/guard/check
 POST /api/guard/confirm   body: {check_id}  → {ok, level}   (MEDIUM only)
 GET  /api/guard/history                    → {payments: [...]}
 GET  /api/guard/config                     → {paypal_client_id, demo_mode,
-                                              demo_cities, languages}
+                                              demo_cities, languages, tools_enabled,
+                                              ai: {provider, model, label}}
 """
 import os
 import re
@@ -23,16 +24,16 @@ from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
 
-from . import location, paypal, risk, scam_check, store
+from . import ai_provider, location, paypal, risk, scam_check, store
 from .translations import LANGUAGES, normalize_language, t, voice_for
-from .web import session_id
+from .web import EMAIL_RE, json_body, session_id
 
 bp = Blueprint('guard', __name__, url_prefix='/api/guard')
 
 MIN_AMOUNT = Decimal('0.01')
 MAX_AMOUNT = Decimal('10000.00')
 MAX_RECIPIENT = 254
-_EMAIL_RE = re.compile(r'^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$')
+_EMAIL_RE = re.compile(EMAIL_RE)
 
 # Each check can cost an AI call, so cap how often one visitor can run them.
 RATE_LIMIT = 30           # checks
@@ -68,10 +69,13 @@ def _parse_amount(raw) -> str:
         amount = Decimal(str(raw).strip().replace(',', ''))
     except InvalidOperation:
         raise BadInput('The amount must be a number, like 25.00.')
-    if not amount.is_finite() or amount != amount.quantize(Decimal('0.01')):
-        raise BadInput('The amount can have at most 2 decimal places.')
+    if not amount.is_finite():
+        raise BadInput('The amount must be a number, like 25.00.')
+    # Range first: quantize() itself fails on giant numbers like 1e999999.
     if not MIN_AMOUNT <= amount <= MAX_AMOUNT:
         raise BadInput(f'The amount must be between {MIN_AMOUNT} and {MAX_AMOUNT}.')
+    if amount != amount.quantize(Decimal('0.01')):
+        raise BadInput('The amount can have at most 2 decimal places.')
     return f'{amount:.2f}'
 
 
@@ -124,7 +128,7 @@ def check():
     if _rate_limited(f'sid:{sid}', f'ip:{location.client_ip(request)}'):
         return jsonify({'error': 'Too many checks. Please wait a few minutes.'}), 429
     try:
-        body = _parse_check_body(request.get_json(silent=True) or {})
+        body = _parse_check_body(json_body())
     except BadInput as e:
         return jsonify({'error': str(e)}), 400
 
@@ -155,7 +159,8 @@ def check():
         'level': decision['level'],
         'score': decision['score'],
         'reasons': decision['reasons'],
-        'scam': {'score': scam['scam_score'], 'red_flags': scam['red_flags'], 'source': scam['source']},
+        'scam': {'score': scam['scam_score'], 'red_flags': scam['red_flags'], 'source': scam['source'],
+                 'model': scam.get('model')},
         'location': {'city': (here or {}).get('city'), 'source': (here or {}).get('source'), **travel},
         'explanation': explanation,
         'voice': voice_for(lang),
@@ -164,8 +169,7 @@ def check():
 
 @bp.post('/confirm')
 def confirm():
-    data = request.get_json(silent=True) or {}
-    check_id = str(data.get('check_id') or '')[:64]
+    check_id = str(json_body().get('check_id') or '')[:64]
     if not store.mark_confirmed(session_id(), check_id):
         return jsonify({'error': 'Only a MEDIUM-risk check can be confirmed.'}), 400
     return jsonify({'ok': True, 'level': risk.MEDIUM})
@@ -185,4 +189,5 @@ def config():
         # a list, not a dict: JSON key sorting would put Amharic before English
         'languages': [[code, info['name']] for code, info in LANGUAGES.items()],
         'tools_enabled': os.getenv('ENABLE_QUICK_TOOLS', 'false').strip().lower() == 'true',
+        'ai': ai_provider.model_info(),   # provider + model name only, never a key
     })
