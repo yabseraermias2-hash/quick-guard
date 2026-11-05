@@ -45,14 +45,40 @@ def assert_sandbox():
         raise RuntimeError('QUICK Guard only supports PAYPAL_MODE=sandbox.')
 
 
+# PayPal client IDs are base64url-style strings (about 80 characters): only
+# letters, digits, - and _. Anything else (an email, a space) is a paste mistake.
+_CLIENT_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,256}$')
+
+
 def client_id() -> str:
-    """Public client ID for the PayPal JS SDK in the browser. Never the secret."""
-    return os.getenv('PAYPAL_CLIENT_ID', '').strip()
+    """Public client ID for the PayPal JS SDK in the browser. Never the secret.
+    Returns '' when the value is missing or clearly not a client ID."""
+    cid = _raw_client_id()
+    return cid if _CLIENT_ID_RE.match(cid) else ''
+
+
+def _raw_client_id() -> str:
+    # Tolerate the usual copy-paste extras: spaces, newlines, wrapping quotes.
+    return os.getenv('PAYPAL_CLIENT_ID', '').strip().strip('"\'').strip()
+
+
+def client_id_problem() -> str | None:
+    """None when PAYPAL_CLIENT_ID looks right, else a safe hint (never the value)."""
+    cid = _raw_client_id()
+    if not cid:
+        return 'PAYPAL_CLIENT_ID is not set on the server.'
+    if _CLIENT_ID_RE.match(cid):
+        return None
+    if '@' in cid:
+        return ('PAYPAL_CLIENT_ID looks like an email address. Paste the sandbox app\'s Client ID '
+                '(developer.paypal.com → Apps & Credentials → Sandbox), not the account email.')
+    return (f'PAYPAL_CLIENT_ID does not look like a PayPal client ID ({len(cid)} characters; '
+            'expected about 80 letters, digits, - and _).')
 
 
 def _credentials() -> tuple[str, str]:
     cid = client_id()
-    secret = os.getenv('PAYPAL_CLIENT_SECRET', '').strip()
+    secret = os.getenv('PAYPAL_CLIENT_SECRET', '').strip().strip('"\'').strip()
     if not cid or not secret:
         raise PayPalError('PayPal sandbox keys are not set on the server.')
     return cid, secret
