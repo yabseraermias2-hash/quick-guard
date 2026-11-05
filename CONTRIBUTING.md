@@ -7,7 +7,7 @@ A simple workflow for our team of 4. Follow these steps every time.
 ```bash
 git clone https://github.com/yabseraermias2-hash/quick-guard.git
 cd quick-guard
-python3 -m venv venv
+python3.13 -m venv venv           # Windows: py -3.13 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env              # then add YOUR OWN PayPal sandbox keys

@@ -84,6 +84,19 @@ app.config.update(
 )
 guard.register(app)
 
+from guard.web import json_body  # noqa: E402
+
+# Guard's JSON endpoints never need more than a few KB (messages are capped at
+# 5,000 characters), so refuse big bodies there before parsing them at all.
+_SMALL_BODY_LIMIT = 256 * 1024
+
+
+@app.before_request
+def _limit_small_bodies():
+    if (request.path.startswith('/api/') or request.path == '/tts') and \
+            (request.content_length or 0) > _SMALL_BODY_LIMIT:
+        return jsonify({'error': 'Request too large.'}), 413
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 _speak_proc  = None
@@ -701,10 +714,12 @@ def events():
 
 
 @app.route('/chat', methods=['POST'])
+@local_only   # needs a local Ollama, so it's off on the public site
 def chat():
-    data = request.get_json(silent=True) or {}
-    message   = data.get('message', '').strip()
-    image_b64 = data.get('image_b64')
+    data = json_body()
+    message   = data.get('message') if isinstance(data.get('message'), str) else ''
+    message   = message.strip()
+    image_b64 = data.get('image_b64') if isinstance(data.get('image_b64'), str) else None
 
     if not message and not image_b64:
         return jsonify({'error': 'Empty message'}), 400
@@ -727,17 +742,19 @@ def chat():
             'graph_url': graph_url,
             'used_memory': used_memory,
         })
-    except Exception as e:
+    except Exception:
         import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Chat failed: {str(e)}'}), 500
+        traceback.print_exc()   # details stay in the server log, never in the reply
+        return jsonify({'error': 'Chat is unavailable right now.'}), 500
 
 
 @app.route('/chat/stream', methods=['POST'])
+@local_only
 def chat_stream():
-    data      = request.get_json(silent=True) or {}
-    message   = data.get('message', '').strip()
-    image_b64 = data.get('image_b64')
+    data      = json_body()
+    message   = data.get('message') if isinstance(data.get('message'), str) else ''
+    message   = message.strip()
+    image_b64 = data.get('image_b64') if isinstance(data.get('image_b64'), str) else None
 
     if not message and not image_b64:
         return jsonify({'error': 'Empty message'}), 400
@@ -745,7 +762,8 @@ def chat_stream():
     try:
         prompt, model, sources, graph_url, used_memory = _build_prompt(message, image_b64)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[chat] prompt build failed: {type(e).__name__}")
+        return jsonify({'error': 'Chat is unavailable right now.'}), 500
 
     def generate():
         # Send metadata first so the UI can render the message header immediately
@@ -788,7 +806,8 @@ def chat_stream():
                 if chunk.get('done'):
                     break
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            print(f"[chat] stream failed: {type(e).__name__}")
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Chat is unavailable right now.'})}\n\n"
             return
 
         full_text = ''.join(full_parts)
@@ -974,13 +993,14 @@ _TTS_MAX_CHARS = 1500
 def tts():
     """Turn text into an MP3 with edge-tts and send it to the browser to play.
     Works on a server with no speakers (e.g. Render)."""
-    data  = request.get_json(silent=True) or {}
-    text  = str(data.get('text', '')).strip()
+    data  = json_body()
+    text  = data.get('text')
+    text  = text.strip() if isinstance(text, str) else ''
     voice = str(data.get('voice') or _load_voice_cfg().get('edge_voice', 'en-US-AriaNeural'))
     if not text:
         return jsonify({'error': 'No text provided'}), 400
     if len(text) > _TTS_MAX_CHARS:
-        text = text[:_TTS_MAX_CHARS]
+        return jsonify({'error': f'Text is too long (max {_TTS_MAX_CHARS} characters).'}), 413
     if voice not in {v['id'] for v in EDGE_VOICES} | guard_voices():
         return jsonify({'error': 'Unknown voice'}), 400
     try:
@@ -1023,19 +1043,22 @@ def health():
 
     # On the deployed site the AI is Groq, not Ollama. Guard also works with
     # keyword rules alone, so a missing AI is "degraded", never "down".
-    from guard.ai_provider import provider_name
+    from guard.ai_provider import model_info as ai_provider_info, provider_name
     provider = provider_name()
     ai_ok = ollama_ok if provider == 'ollama' else bool(os.getenv('GROQ_API_KEY', '').strip())
 
+    # Always 200: Render's health check restarts or fails a deploy on non-200,
+    # and a missing AI must never take the whole site down.
     uptime_s = int(time.time() - _start_time)
     return jsonify({
         'status': 'ok' if ai_ok else 'degraded',
         'ai_provider': provider,
+        'ai_model': ai_provider_info()['model'],
         'ollama': ollama_ok,
-        'models': ollama_models,
+        'models': ollama_models if QUICK_TOOLS_ENABLED else [],
         'uptime': uptime_s,
         'tools_enabled': QUICK_TOOLS_ENABLED,
-    }), 200 if ai_ok else 503
+    }), 200
 
 
 # ── Enterprise Monitoring ──────────────────────────────────────────────────────

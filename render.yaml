@@ -1,0 +1,40 @@
+# Render Blueprint for QUICK Guard (PayPal SANDBOX only).
+# Render → New → Blueprint → pick this repo. Render reads this file, then asks
+# for every value marked `sync: false` (secrets are typed into Render, never committed).
+# Python version comes from .python-version (3.13).
+services:
+  - type: web
+    name: quick-guard
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    # ONE worker on purpose: checks, payment history and rate limits live in
+    # memory, so a second worker would not see them. Threads handle concurrency.
+    startCommand: gunicorn server:app --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    envVars:
+      # ── PayPal sandbox (from developer.paypal.com → Apps & Credentials → Sandbox) ──
+      - key: PAYPAL_MODE
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      # ── AI: hosted model on Groq (no Ollama on Render) ──
+      - key: AI_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b      # free Groq keys can't use Llama models; check with scripts/check_groq.py
+      - key: GROQ_FALLBACK_MODEL
+        value: openai/gpt-oss-20b       # used when the first model hits the free-tier rate limit
+      # ── QUICK Guard ──
+      - key: SECRET_KEY
+        generateValue: true             # Render makes a random one; sessions survive restarts
+      - key: DEMO_MODE
+        value: "true"                   # clearly labeled "pay from another city" demo for judges
+      - key: ENABLE_QUICK_TOOLS
+        value: "false"                  # NEVER true on a public server (code runner, scanners, mic)

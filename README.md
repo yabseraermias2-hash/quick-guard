@@ -29,7 +29,7 @@ _TODO: Render URL_
 
 ## Setup (run it yourself)
 
-You need **Python 3.12 or 3.13** and **git**.
+You need **Python 3.13** and **git**. 3.13 is the version the live demo runs on Render (pinned in `.python-version`), so use it locally too.
 
 ```bash
 # 1. Clone
@@ -37,7 +37,7 @@ git clone https://github.com/<owner>/quick-guard.git
 cd quick-guard
 
 # 2. Create and activate a virtual environment
-python3 -m venv venv
+python3.13 -m venv venv           # Windows: py -3.13 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 
 # 3. Install packages
@@ -59,7 +59,9 @@ Then open the `http://localhost:PORT` address the server prints.
 
 Set `AI_PROVIDER` in `.env`:
 - `ollama`: local Llama 3. Install [Ollama](https://ollama.com) and run `ollama pull llama3`.
-- `groq`: hosted Llama 3 API (used by the live demo). _TODO: details_
+- `groq`: hosted model on [Groq](https://console.groq.com) (used by the live demo). Default `openai/gpt-oss-120b`,
+  falling back to `openai/gpt-oss-20b` when the free-tier rate limit is hit. Free Groq keys can't use Llama models.
+  Put your key in `.env` as `GROQ_API_KEY`, then run `python scripts/check_groq.py` to confirm it works.
 
 ## How judges can test it
 

@@ -431,6 +431,12 @@
     .chat-area.drag-over { outline:2px dashed var(--accent); outline-offset:-4px; }
 
 
+    /* Public QUICK Guard site (ENABLE_QUICK_TOOLS=false): QUICK's chat needs a
+       local Ollama, so it's hidden and the orb takes the whole center column.
+       The class starts on and is only removed when the server says tools are on. */
+    .app.no-chat .chat-area { display:none; }
+    .app.no-chat .orb-section { flex:1; height:auto; border-bottom:none; }
+
     /* ── Responsive ── */
     @media (max-width:900px) {
       .left-panel, .right-panel { display:none; }
@@ -478,7 +484,7 @@
   <span id="healthBannerMsg">QUICK is reconnecting — Ollama may be down. Retrying...</span>
 </div>
 
-<div class="app">
+<div class="app no-chat">
 
   <!-- ── Left Panel: Reports ── -->
   <aside class="panel left-panel">
@@ -569,7 +575,7 @@
         <input type="text" class="text-input" id="textInput"
                placeholder="Ask QUICK anything — or say 'Hey QUICK'..."
                autocomplete="off">
-        <button class="icon-btn" id="micBtn" onclick="toggleMic()" title="Voice (Ctrl+M)">◉</button>
+        <button class="icon-btn" id="micBtn" onclick="toggleMic()" title="Voice (Ctrl+M)" hidden>◉</button>
         <button class="icon-btn danger" id="stopBtn" onclick="stopSpeaking()" title="Stop" style="display:none">◼</button>
         <button class="icon-btn" onclick="sendMessage()" title="Send (Enter)">▶</button>
       </div>
@@ -1083,23 +1089,35 @@ function hideTyping() {
   if (typingEl) { typingEl.remove(); typingEl = null; }
 }
 
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Everything is HTML-escaped first; only our own markup (code blocks, inline
+// code, bold, line breaks) is added back. Chat text, AI replies and QUICK Guard
+// results can all contain attacker-written text, so nothing is ever trusted as HTML.
 function formatText(text) {
   if (!text) return '';
-  // Code blocks
+  const blocks = [];
+  text = String(text).replace(/\u0000/g, '');
+  // Code blocks (kept aside as placeholders, then escaped text around them)
   text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     const safe = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     let hl;
     try { hl = lang ? hljs.highlight(code.trim(),{language:lang,ignoreIllegals:true}).value : hljs.highlightAuto(code.trim()).value; }
     catch(e) { hl = safe; }
-    return `<div class="code-block"><div class="code-header">${lang||'code'}<button class="copy-btn" onclick="copyCode(this)">copy</button></div><pre><code class="hljs">${hl}</code></pre></div>`;
+    blocks.push(`<div class="code-block"><div class="code-header">${lang||'code'}<button class="copy-btn" onclick="copyCode(this)">copy</button></div><pre><code class="hljs">${hl}</code></pre></div>`);
+    return `\u0000${blocks.length - 1}\u0000`;
   });
+  text = escapeHtml(text);
   // Inline code
   text = text.replace(/`([^`\n]+)`/g,'<code class="inline-code">$1</code>');
   // Bold
   text = text.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
   // Newlines
   text = text.replace(/\n/g,'<br>');
-  return text;
+  return text.replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]);
 }
 
 function copyCode(btn) {
@@ -1283,7 +1301,7 @@ async function speakResponse(text) {
     const resp = await fetch('/tts', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text: clean}),
+      body: JSON.stringify({text: clean.slice(0, 1500)}),   // server refuses longer text
     });
     if (!resp.ok) throw new Error('tts ' + resp.status);
     const url = URL.createObjectURL(await resp.blob());
@@ -1323,6 +1341,26 @@ let _wakeTimer    = null;
 let _wakeFailures = 0;
 let _wakeDisabled = false;   // set when mic permission is denied
 
+// The microphone is OFF unless the server runs with ENABLE_QUICK_TOOLS=true
+// (local QUICK only). On the public QUICK Guard site it can never turn on:
+// not on load, not when the tab regains focus, not after the voice speaks
+// (which says "QUICK Guard…" and used to trigger the "quick" wake word).
+let _voiceInputAllowed = false;
+window.setChatAllowed = (allowed) => {
+  document.querySelector('.app').classList.toggle('no-chat', !allowed);
+  if (typeof resize === 'function') resize();   // the orb canvas changed size
+};
+
+window.setVoiceInputAllowed = (allowed) => {
+  _voiceInputAllowed = !!allowed && !!SpeechRec;
+  const btn = document.getElementById('micBtn');
+  if (btn) btn.hidden = !_voiceInputAllowed;
+  if (!_voiceInputAllowed) {
+    stopWakeWord();
+    try { if (_queryRec) _queryRec.abort(); } catch(e) {}
+  }
+};
+
 function stopWakeWord() {
   clearTimeout(_wakeTimer); _wakeTimer = null;
   if (_wakeRec) {
@@ -1338,7 +1376,7 @@ function scheduleWakeWord(delay) {
 }
 
 function startWakeWord() {
-  if (!SpeechRec || _voiceBusy || _wakeDisabled) return;
+  if (!_voiceInputAllowed || !SpeechRec || _voiceBusy || _wakeDisabled) return;
   if (document.hidden) return;              // resumed by visibilitychange
   stopWakeWord();
   const rec = new SpeechRec();
@@ -1380,7 +1418,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ── Active query listen ───────────────────────────────
 function startQueryListen() {
-  if (_voiceBusy) return;
+  if (!_voiceInputAllowed || _voiceBusy) return;
   stopWakeWord();             // never run wake + query recognizers together
   _voiceBusy = true;
   micActive  = true;
@@ -1447,8 +1485,9 @@ function stopSpeaking() {
 // prompt just for opening the page. The ◉ button still works for everyone.
 if (SpeechRec) {
   fetch('/health').then(r => r.json()).then(d => {
+    window.setVoiceInputAllowed(d.tools_enabled);
     if (d.tools_enabled) setTimeout(startWakeWord, 1500);
-  }).catch(() => {});
+  }).catch(() => window.setVoiceInputAllowed(false));
 } else {
   console.warn('[QUICK] Web Speech API not supported in this browser');
 }
@@ -1783,8 +1822,12 @@ function printReport() {
 // ══════════════════════════════════════════════════════
 // HUD / STATS POLLING
 // ══════════════════════════════════════════════════════
+let _guardBrain = null;
+window.setGuardBrain = (label) => { _guardBrain = label; updateModelDisplay(label); };
+
 function updateModelDisplay(model) {
   if (!model) return;
+  if (_guardBrain && model !== _guardBrain && !_voiceInputAllowed) model = _guardBrain;   // public site: always Guard's AI
   currentModel = model;
   document.getElementById('hudModel').textContent   = model.toUpperCase();
   document.getElementById('statusModel').textContent = `BRAIN: ${model.toUpperCase()}`;
@@ -1798,7 +1841,7 @@ async function pollStats() {
     document.getElementById('hudUptime').textContent  = `UP: ${d.uptime}`;
     document.getElementById('statusUptime').textContent = `UP: ${d.uptime}`;
     document.getElementById('statusMemBar').textContent = `MEM: ${d.total_turns} TURNS`;
-    if (d.available_models && d.available_models.length && currentModel === '--') {
+    if (!_guardBrain && d.available_models && d.available_models.length && currentModel === '--') {
       updateModelDisplay(d.available_models[0]);
     }
   } catch(e) {}
