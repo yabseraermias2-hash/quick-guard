@@ -150,7 +150,15 @@
     });
 
     const loc = r.location || {};
-    let meta = loc.city ? `Location: ${loc.city}` + (loc.source === 'demo' ? ' (DEMO MODE)' : '') : 'Location: unknown';
+    const why = {
+      denied: 'browser location is blocked for this site (allow it from the icon in the address bar)',
+      unavailable: 'your device could not find its location (check that Location Services are on)',
+      timeout: 'your device took too long to find its location',
+      unsupported: 'this browser has no location support',
+    }[r.locationProblem];
+    let meta = loc.city
+      ? `Location: ${loc.city}` + (loc.source === 'demo' ? ' (DEMO MODE)' : loc.source === 'ip' ? ' (approximate, from your internet address)' : '')
+      : 'Location: unknown' + (why ? ` · ${why}` : '');
     if (loc.known) meta += ` · ${loc.km.toLocaleString()} km from last payment · ${loc.speed_kmh.toLocaleString()} km/h`;
     $('gMeta').textContent = meta;
 
@@ -220,6 +228,7 @@
     try {
       const demoOn = $('gDemoOn') && $('gDemoOn').checked;
       const coords = !demoOn && $('gUseLocation').checked ? await window.QuickLocation.getCoords() : null;
+      const locationProblem = coords ? null : (!demoOn && $('gUseLocation').checked ? window.QuickLocation.lastProblem : null);
       const r = await api('POST', '/api/guard/check', {
         amount: $('gAmount').value.trim(),
         currency: 'USD',
@@ -229,6 +238,7 @@
         coords,
         demo_city: demoOn ? $('gDemoCity').value : null,
       });
+      r.locationProblem = locationProblem;
       showResult(r);
       loadHistory();
     } catch (e) {
