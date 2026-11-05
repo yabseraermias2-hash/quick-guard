@@ -1,7 +1,8 @@
 # QUICK Guard — Project Brief
 
 **An AI guardian that checks a PayPal payment for scams and account takeover *before* any money moves.**
-Built for the PayPal AI Hackathon 2026 by Yab (Yabsera Kebede), Same Dawit, Ismail Ishek and Nahom Tefera.
+Built solo by **Yabsera Kebede** for the PayPal AI Hackathon 2026, with Claude Code as an AI pair programmer.
+**Live:** https://quick-guard.onrender.com (free plan: the first load can take up to a minute while the server wakes up).
 PayPal **Sandbox only**: no real money ever moves.
 
 ---
@@ -46,7 +47,7 @@ browser, decides whether PayPal is allowed to create the order.
 |---|---|---|
 | A · PayPal | `guard/paypal.py`, `guard/routes_payments.py`, `guard/store.py` | OAuth2 client-credentials token (cached), Orders v2 create/capture with idempotency keys, sandbox-only guard, per-session in-memory store |
 | B · Scam check | `guard/scam_check.py`, `guard/ai_provider.py`, `guard/translations.py` | Keyword rules in 7 languages + AI check (Groq or local Ollama), evidence rule, all warning text and voices |
-| C · Location | `guard/location.py`, `static/location.js` | Browser location (rounded) → IP fallback; haversine distance; impossible-travel speed check; DEMO MODE cities |
+| C · Location | `guard/location.py`, `static/location.js` | Browser location (rounded) → IP fallback using the visitor's real IP behind Render/Cloudflare; haversine distance; impossible-travel speed check; DEMO MODE cities; tells the user why location is unknown |
 | D · Risk + dashboard | `guard/risk.py`, `guard/routes.py`, `static/guard.js`, `static/guard.css` | The LOW/MEDIUM/HIGH rule, the Guard API, the dashboard (orb, flags, voice, PayPal buttons, history) |
 | Shared | `server.py`, `index.html` | Flask app, `/tts` voice, security settings; the original QUICK UI that hosts the Guard panel |
 | Ops | `render.yaml`, `.python-version`, `scripts/check_groq.py`, `scripts/sandbox_payment_test.py` | Render deploy, Python 3.13 pin, Groq key checker, command-line sandbox payment |
@@ -75,6 +76,7 @@ If both the scam score and the location score are ≥ 40, the result is always *
 | Asks for credentials | 35 | "password", "one-time code", "verify your account", የይለፍ ቃል |
 | Suspicious link | 30 | http://, bare IPs, link shorteners, PayPal look-alikes, punycode |
 | Secrecy | 30 | "don't tell anyone", ለማንም አትናገር |
+| Fake prize | 30 | "you've won", "claim your prize", "processing fee", አሸንፈዋል |
 | Impersonation | 25 | "PayPal Support", "Dear customer", "call us now at +1…" |
 | Name mismatch | 25 | claims to be PayPal/Amazon/… but the money goes to a personal email |
 | False urgency | 20 | "urgent", "within 24 hours", "final notice", አስቸኳይ |
@@ -99,11 +101,12 @@ keyword score, plus 40 points for trying to manipulate the checker.
 - **Sandbox only.** `PAYPAL_MODE` must be `sandbox` or the server refuses to start, and there is no live PayPal URL in the code.
 - **The server is the gate.** Order creation and capture both re-check the saved result. Checks belong to one browser session (signed cookie) and expire after 15 minutes.
 - **No double payment.** Capture claims the check under a lock before calling PayPal, and PayPal's `PayPal-Request-Id` makes the capture call idempotent.
-- **Secrets** live only in `.env` (local) or Render environment variables. Logs show the HTTP status, PayPal's error name and `debug_id`, never keys, tokens or full payment bodies.
+- **Secrets** live only in `.env` (local) or Render environment variables. Logs show the HTTP status, PayPal's error name and `debug_id`, never keys, tokens, full payment bodies or IP addresses.
+- **Config mistakes are caught.** A `PAYPAL_CLIENT_ID` with stray spaces or quotes is cleaned up. One that is clearly wrong (for example an email address) is never sent to the page; the page names the mistake without showing the value, and `/health` reports `paypal_client_id: ok | missing | invalid`.
 - **Location** is rounded to 0.1° (≈ 11 km) the moment it arrives. Exact GPS is never stored or returned.
 - **No payment data on disk.** Everything lives in server memory and resets on restart.
 - **Inputs are validated server-side.** Amount 0.01–10,000.00 USD with at most 2 decimals; strict email; message ≤ 5,000 characters; JSON bodies ≤ 256 KB; `/tts` ≤ 1,500 characters and approved voices only.
-- **Rate limit:** 30 checks per 10 minutes, per session and per IP.
+- **Rate limit:** 30 checks per 10 minutes, per session and per visitor IP. On Render the IP comes from Cloudflare's `CF-Connecting-IP` (Cloudflare rejects client-supplied values), else the rightmost `X-Forwarded-For` entry that isn't a Render or Cloudflare hop. Entries a client could fake are never used.
 - **No HTML injection.** Every server value is inserted as text (`textContent`), and the chat renderer escapes everything before formatting.
 - **Cookies** are `HttpOnly` and `SameSite=Lax`, plus `Secure` on Render.
 - **QUICK's original power tools** (chat, code runner, scanners, uploads, monitoring, microphone) are off unless `ENABLE_QUICK_TOOLS=true`, which is never set on the public site. With it off, those routes return 403, and the microphone can never switch on, not even from the wake word.
@@ -113,14 +116,16 @@ keyword score, plus 40 points for trying to manipulate the checker.
 Warnings, red flags and spoken explanations are available in **English, Amharic (አማርኛ), Spanish, French,
 Mandarin, Hindi and Nepali**, with keyword rules in each language. `/tts` turns the explanation into speech
 with Microsoft Edge neural voices (e.g. `am-ET-MekdesNeural` for Amharic), so it works on a server with no
-speakers. Amharic is reviewed by a native speaker. The other languages, and the two newest Amharic labels
-(secrecy, "aimed at the AI"), still need a native-speaker check.
+speakers. Amharic is reviewed by a native speaker. The other languages, and the three newest Amharic labels
+(secrecy, "aimed at the AI", prize), still need a native-speaker check.
 
 ## 7. Deploying (Render)
 
 `render.yaml` defines everything: Python 3.13, `pip install -r requirements.txt`, and
 `gunicorn server:app --workers 1 --threads 4`. **Keep one worker**, because checks and history live in memory.
 The health check is `/health`, which answers 200 even when the AI is down, since Guard still protects users with keyword rules.
+`PYTHONUNBUFFERED=1` makes the app's log lines (`[PayPal]`, `[Location]`, `[Guard]`) show up in Render's logs right away.
+Render auto-deploys every push to `main`.
 
 Secrets you type into Render (never commit them): `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `GROQ_API_KEY`.
 A free Groq key allows about 6 new checks a minute per model (~12 with the fallback) and 1,000 a day per model.
@@ -128,16 +133,17 @@ Past that, checks fall back to keyword rules until the minute resets.
 `SECRET_KEY` is generated by Render. Before deploying, run `python scripts/check_groq.py` with your key in
 `.env` to confirm which Groq models your key can use.
 
-## 8. Test results (pre-deploy audit, 2026-11-04)
+## 8. Test results
 
-- **210 automated tests pass** (`python -m pytest -q`), including 73 regression tests from the audit.
+- **232 automated tests pass** (`python -m pytest -q`), including the audit's regression tests and tests for both live bugs below.
 - **Scam accuracy, 40 real messages through the live AI:** 20 normal (including "", "ቡና", emojis, typos)
   → all LOW; 20 scams (fake limits, invoices, support callbacks, gift cards, crypto, overpayment, prizes,
   family emergencies, bad links, 3 in Amharic) → all HIGH. **0 false positives, 0 false negatives, every
   red flag quotes the message.**
 - **Location:** Erie → Pittsburgh 3 h later = LOW (63 km/h). Addis → Tokyo 2 days later = LOW (217 km/h).
   Addis → Tokyo 2 minutes later = HIGH (312,031 km/h). No location, denied permission and junk coordinates all work.
-- **PayPal sandbox:** a real order was created and captured by a sandbox buyer (capture `6XN59489CV561532L`).
+- **PayPal sandbox:** real orders were created and captured by a sandbox buyer, locally (capture `6XN59489CV561532L`)
+  and on the live site ($45.00, LOW 5/100, capture `3XE96830G46460116`).
   HIGH, unconfirmed MEDIUM, double captures, simultaneous captures, fake or tampered order IDs, expired
   checks and other sessions are all refused.
 - **Attacks:** 5 prompt injections stay HIGH, even with an AI that fully obeys them. XSS payloads stay plain text.
@@ -146,7 +152,14 @@ Past that, checks fall back to keyword rules until the minute resets.
 - **AI failure:** Ollama down, a wrong or missing Groq key, and 15 kinds of broken AI JSON all fall back to keyword
   rules with calm wording, and the page keeps working.
 
-## 9. Known limits
+## 9. Bugs found after deploying (and fixed)
+
+| Bug on the live site | Cause | Fix |
+|---|---|---|
+| PayPal buttons: "Could not load PayPal." | `PAYPAL_CLIENT_ID` on Render held an email address; PayPal's SDK answered HTTP 400 | Re-pasted the real Client ID; the server now validates the ID, explains the mistake safely and reports it in `/health` |
+| "Location: unknown" when the browser didn't share its location | The IP fallback took the *last* `X-Forwarded-For` entry, which on Render is its own proxy (`['public', 'proxy', 'proxy']` in the logs), so the lookup was skipped. Every visitor also shared one rate limit | Use `CF-Connecting-IP`, else the rightmost non-proxy entry; don't cache failed lookups; the page says why location is unknown. Verified live: blocked browser location now gives the visitor's city, and faked headers are ignored |
+
+## 10. Known limits
 
 - State is in memory: a Render restart or redeploy clears checks and history, and the app must run as a single process.
 - The free Render plan sleeps when idle, so the first visit after a while takes ~30–60 s to wake.
