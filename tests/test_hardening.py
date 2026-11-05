@@ -199,3 +199,57 @@ def test_short_links_without_http_are_suspicious(text):
 
 def test_update_your_billing_is_a_credential_request():
     assert 'credential_request' in scam_check.keyword_check('Update your billing now')['categories']
+
+
+# ── Groq: free-tier rate limits ───────────────────────────────────
+
+class _Resp:
+    def __init__(self, status, content='{"scam_score": 5, "red_flags": [], "explanation": "ok"}'):
+        self.status_code = status
+        self._content = content
+
+    def json(self):
+        return {'choices': [{'message': {'content': self._content}}]}
+
+
+def _groq_env(monkeypatch):
+    monkeypatch.setenv('AI_PROVIDER', 'groq')
+    monkeypatch.setenv('GROQ_API_KEY', 'test-key')
+    monkeypatch.delenv('GROQ_MODEL', raising=False)
+    monkeypatch.delenv('GROQ_FALLBACK_MODEL', raising=False)
+
+
+def test_rate_limited_model_falls_back_and_the_ui_names_the_fallback(client, monkeypatch):
+    _groq_env(monkeypatch)
+    monkeypatch.setattr(ai_provider, 'chat_json', _real_chat_json)   # the file's fixture fakes it offline
+    calls = []
+
+    def fake_post(url, json=None, **kw):
+        calls.append((json['model'], json.get('reasoning_effort')))
+        return _Resp(429) if json['model'] == 'openai/gpt-oss-120b' else _Resp(200)
+    monkeypatch.setattr(ai_provider.requests, 'post', fake_post)
+    r = client.post('/api/guard/check', json=GOOD).get_json()
+    assert calls == [('openai/gpt-oss-120b', 'low'), ('openai/gpt-oss-20b', 'low')]
+    assert r['scam']['source'] == 'ai+keywords' and r['scam']['model'] == 'Groq · openai/gpt-oss-20b'
+
+
+def test_bad_key_does_not_try_the_fallback(monkeypatch):
+    _groq_env(monkeypatch)
+    calls = []
+    monkeypatch.setattr(ai_provider.requests, 'post', lambda url, json=None, **kw: calls.append(1) or _Resp(401))
+    with pytest.raises(ai_provider.AIError):
+        _real_chat_json('s', 'u')
+    assert len(calls) == 1
+
+
+def test_same_message_is_answered_from_cache(monkeypatch):
+    _groq_env(monkeypatch)
+    calls = []
+    monkeypatch.setattr(ai_provider.requests, 'post', lambda url, json=None, **kw: calls.append(1) or _Resp(200))
+    monkeypatch.setattr(ai_provider, 'chat_json', _real_chat_json)
+    for _ in range(3):
+        assert scam_check.check('rent for November', 'a@b.co', '5.00')['source'] == 'ai+keywords'
+    assert len(calls) == 1
+
+
+_real_chat_json = ai_provider.chat_json
