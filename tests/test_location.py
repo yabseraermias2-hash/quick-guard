@@ -115,3 +115,65 @@ def test_forwarded_for_only_trusted_on_render(monkeypatch):
     monkeypatch.setenv('RENDER', 'true')
     # the last entry is the one Render's proxy added; the first can be faked
     assert loc.client_ip(req) == '203.0.113.9'
+
+
+# ── Live bug: "Location: unknown" on Render (proxy IP was looked up) ──
+
+VISITOR = '81.2.69.142'
+
+
+@pytest.mark.parametrize('headers', [
+    # Render appends its own private proxy hop after the visitor
+    {'X-Forwarded-For': f'{VISITOR}, 10.201.4.7'},
+    # ... and sometimes a Cloudflare edge too
+    {'X-Forwarded-For': f'{VISITOR}, 172.70.1.9, 10.201.4.7'},
+    # Cloudflare's own header wins
+    {'CF-Connecting-IP': VISITOR, 'X-Forwarded-For': f'{VISITOR}, 10.201.4.7'},
+    # IPv6 visitor
+    {'X-Forwarded-For': '2001:db8::5, 10.201.4.7'},
+])
+def test_client_ip_skips_render_and_cloudflare_hops(monkeypatch, headers):
+    monkeypatch.setenv('RENDER', 'true')
+    want = '2001:db8::5' if '2001:db8::5' in headers['X-Forwarded-For'] else VISITOR
+    assert loc.client_ip(FakeRequest('10.201.4.7', headers)) == want
+
+
+def test_client_ip_ignores_faked_leftmost_entries(monkeypatch):
+    monkeypatch.setenv('RENDER', 'true')
+    # The visitor sent "X-Forwarded-For: 6.6.6.6" themselves; only the hop
+    # Render/Cloudflare saw is trusted.
+    req = FakeRequest('10.201.4.7', {'X-Forwarded-For': f'6.6.6.6, {VISITOR}, 10.201.4.7'})
+    assert loc.client_ip(req) == VISITOR
+
+
+def test_client_ip_falls_back_to_remote_addr_when_only_proxies(monkeypatch):
+    monkeypatch.setenv('RENDER', 'true')
+    req = FakeRequest('10.201.4.7', {'X-Forwarded-For': '10.201.4.7, garbage', 'CF-Connecting-IP': 'nope'})
+    assert loc.client_ip(req) == '10.201.4.7'
+
+
+def test_resolve_uses_visitor_ip_on_render(monkeypatch):
+    monkeypatch.setenv('RENDER', 'true')
+    loc._ip_cache.clear()
+    seen = []
+    monkeypatch.setattr(loc, '_lookup_ipapi', lambda ip: seen.append(ip) or {'lat': 51.51, 'lon': -0.09, 'city': 'London, UK'})
+    req = FakeRequest('10.201.4.7', {'X-Forwarded-For': f'{VISITOR}, 10.201.4.7'})
+    assert loc.resolve(None, None, req) == {'lat': 51.5, 'lon': -0.1, 'city': 'London, UK', 'source': 'ip'}
+    assert seen == [VISITOR]
+
+
+def test_failed_ip_lookup_is_not_cached(monkeypatch):
+    loc._ip_cache.clear()
+    monkeypatch.setattr(loc, '_lookup_ipapi', lambda ip: None)       # e.g. rate-limited
+    monkeypatch.setattr(loc, '_lookup_ipwho', lambda ip: None)
+    assert loc.ip_lookup(VISITOR) is None
+    monkeypatch.setattr(loc, '_lookup_ipwho', lambda ip: {'lat': 51.5, 'lon': -0.1, 'city': 'London, UK'})
+    assert loc.ip_lookup(VISITOR) == {'lat': 51.5, 'lon': -0.1, 'city': 'London, UK'}
+
+
+def test_ip_shape_log_never_contains_an_ip(monkeypatch, capsys):
+    monkeypatch.setenv('RENDER', 'true')
+    monkeypatch.setattr(loc, '_logged_ip_shape', False)
+    loc.client_ip(FakeRequest('10.201.4.7', {'X-Forwarded-For': f'{VISITOR}, 10.201.4.7'}))
+    out = capsys.readouterr().out
+    assert "entries=['public', 'proxy']" in out and VISITOR not in out and '10.201' not in out

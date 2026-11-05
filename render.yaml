@@ -38,3 +38,5 @@ services:
         value: "true"                   # clearly labeled "pay from another city" demo for judges
       - key: ENABLE_QUICK_TOOLS
         value: "false"                  # NEVER true on a public server (code runner, scanners, mic)
+      - key: PYTHONUNBUFFERED
+        value: "1"                      # app log lines ([PayPal], [Location], [Guard]) reach Render's logs right away
