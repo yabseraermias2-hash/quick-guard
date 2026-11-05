@@ -70,6 +70,9 @@ from guard.paypal import assert_sandbox
 from guard.translations import all_voices as guard_voices
 
 assert_sandbox()  # refuse to start against anything but the PayPal sandbox
+from guard.paypal import client_id_problem as _paypal_id_problem
+if _paypal_id_problem():
+    print(f'[PayPal] WARNING: {_paypal_id_problem()} PayPal buttons will not load.')
 
 _secret = os.getenv('SECRET_KEY', '').strip()
 if not _secret:
@@ -1058,6 +1061,7 @@ def health():
         'models': ollama_models if QUICK_TOOLS_ENABLED else [],
         'uptime': uptime_s,
         'tools_enabled': QUICK_TOOLS_ENABLED,
+        'paypal_client_id': 'ok' if not _paypal_id_problem() else ('missing' if not os.getenv('PAYPAL_CLIENT_ID', '').strip() else 'invalid'),
     }), 200
 
 
