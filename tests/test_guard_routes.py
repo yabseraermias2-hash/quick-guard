@@ -63,6 +63,24 @@ def test_amharic_explanation_and_voice(client):
     assert any('ሀ' <= ch <= '፿' for ch in r['explanation'])
 
 
+def test_amharic_spoken_text_is_reviewed_and_english_ai_text_is_separate(client, monkeypatch):
+    from guard.translations import MESSAGES, t
+    broken = 'ገፅታ የሆነ ገበታ ካርዶች'
+    monkeypatch.setattr(ai_provider, 'chat_json', lambda *a, **kw: {
+        'scam_score': 99, 'explanation': f'Gift card scam. {broken}',
+        'red_flags': [{'quote': 'gift cards', 'why': broken, 'category': 'gift_card_or_crypto'}]})
+    r = check(client, message=SCAM, language='am').get_json()
+    assert r['level'] == 'HIGH' and r['voice'] == 'am-ET-MekdesNeural'
+    assert broken not in r['explanation'] and all(broken not in f for f in r['scam']['red_flags'])
+    assert r['explanation'].startswith(t('verdict.HIGH', 'am'))
+    assert r['explanation'].endswith(MESSAGES['scam.many']['am'].split('{flags}')[1])   # the advice
+    assert r['scam']['ai_explanation_en'].startswith('Gift card scam.')
+    # English results carry no separate AI text.
+    monkeypatch.setattr(ai_provider, 'chat_json', lambda *a, **kw: {
+        'scam_score': 99, 'explanation': 'Gift card scam.', 'red_flags': []})
+    assert check(client, message=SCAM, language='en').get_json()['scam']['ai_explanation_en'] is None
+
+
 def test_medium_flow_requires_confirm(client, monkeypatch):
     monkeypatch.setattr(ai_provider, 'chat_json', lambda *a, **kw: {
         'scam_score': 50, 'red_flags': [{'quote': 'Thanks for dinner', 'why': 'Unusual request'}],

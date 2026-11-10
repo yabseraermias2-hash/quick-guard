@@ -160,7 +160,9 @@ def check():
         'score': decision['score'],
         'reasons': decision['reasons'],
         'scam': {'score': scam['scam_score'], 'red_flags': scam['red_flags'], 'source': scam['source'],
-                 'model': scam.get('model')},
+                 'model': scam.get('model'),
+                 # Fixed-text languages (Amharic): the AI's own words, in English, shown but never spoken.
+                 'ai_explanation_en': scam.get('ai_explanation_en')},
         'location': {'city': (here or {}).get('city'), 'source': (here or {}).get('source'), **travel},
         'explanation': explanation,
         'voice': voice_for(lang),

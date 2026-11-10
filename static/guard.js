@@ -140,6 +140,9 @@
       `Risk ${r.score}/100 · scam check ${r.scam.score}/100 (` +
       (r.scam.model ? `AI: ${r.scam.model} + keyword rules` : 'keyword rules only') + ')';
     $('gExplanation').textContent = r.explanation;
+    const aiEn = $('gAiEnglish');
+    aiEn.textContent = r.scam.ai_explanation_en ? 'AI explanation (English): ' + r.scam.ai_explanation_en : '';
+    aiEn.hidden = !r.scam.ai_explanation_en;
 
     const flags = $('gFlags');
     flags.innerHTML = '';
