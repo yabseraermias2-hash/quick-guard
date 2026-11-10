@@ -165,11 +165,73 @@ def test_ai_output_is_clamped_and_trimmed():
     assert scam_check.validate_ai_result({'scam_score': -9, 'explanation': 'ok'})['scam_score'] == 0
 
 
-def test_amharic_request_rejects_english_ai_answer(monkeypatch):
+def test_hindi_request_rejects_english_ai_answer(monkeypatch):
     fake_ai(monkeypatch, {'scam_score': 90, 'red_flags': [], 'explanation': 'English only'})
-    r = scam_check.check(GIFT_CARD, 'x@gmail.com', '50.00', language='am')
+    r = scam_check.check(GIFT_CARD, 'x@gmail.com', '50.00', language='hi')
     assert r['source'] == 'keywords'
-    assert any('ሀ' <= ch <= '፿' for ch in r['explanation'])
+    assert any('\u0900' <= ch <= '\u097f' for ch in r['explanation'])
+
+
+# ── Amharic: built only from reviewed strings, never free-form AI Amharic ──
+
+AM_REVIEWED = {MESSAGES[k]['am'] for k in MESSAGES}
+AM_FLAG_NAMES = {MESSAGES[f'flag.{c}']['am']: c for c in scam_check.FLAG_CATEGORIES}
+BROKEN_AM = 'ገፅታ የሆነ ገበታ ካርዶች'   # what the live AI once wrote for "gift cards"
+
+
+def _label(flag):
+    return flag.split(': “')[0]
+
+
+def test_amharic_warning_uses_only_reviewed_strings(monkeypatch):
+    seen = {}
+
+    def ai(system, user, timeout=20):
+        seen['system'] = system
+        return {'scam_score': 95, 'explanation': f'Classic gift card scam. {BROKEN_AM}', 'red_flags': [
+            {'quote': 'To unlock your funds', 'why': BROKEN_AM, 'category': 'threat_account_limited'},
+            {'quote': 'send the codes', 'why': 'asks for codes', 'category': 'credential_request'},
+            {'quote': 'buy 3 Google Play', 'why': 'made-up reason', 'category': 'not-a-category'},
+            {'quote': 'gift cards', 'why': BROKEN_AM, 'category': 'gift_card_or_crypto'},
+        ]}
+    monkeypatch.setattr(ai_provider, 'chat_json', ai)
+    r = scam_check.check(GIFT_CARD, 'x@gmail.com', '50.00', language='am')
+
+    # The AI is asked in English, so it never writes the Amharic itself.
+    assert 'explanation in English' in seen['system'] and 'gift_card_or_crypto' in seen['system']
+    assert r['source'] == 'ai+keywords' and r['scam_score'] == 95
+    # Every flag = a reviewed Amharic name + words quoted from the message. One per category.
+    labels = [_label(f) for f in r['red_flags']]
+    assert labels and all(lbl in AM_FLAG_NAMES for lbl in labels)
+    assert len(labels) == len(set(labels))
+    assert t('flag.threat_account_limited', 'am') + ': “To unlock your funds”' in r['red_flags']   # AI-only find
+    assert t('flag.credential_request', 'am') + ': “send the codes”' in r['red_flags']
+    # Explanation = the reviewed "this looks like a scam … do not send money" sentence around those flags.
+    assert r['explanation'] == t('scam.many', 'am', flags=t('flag.join', 'am').join(r['red_flags']))
+    everything = ' '.join([r['explanation'], *r['red_flags']])
+    assert BROKEN_AM not in everything and 'made-up' not in everything and 'asks for codes' not in everything
+    # The AI's own (English) words stay available, separately.
+    assert r['ai_explanation_en'].startswith('Classic gift card scam.')
+
+
+def test_amharic_ai_only_scam_without_named_flags_shows_verdict_only(monkeypatch):
+    fake_ai(monkeypatch, {'scam_score': 85, 'explanation': 'Suspicious.', 'red_flags': [
+        {'quote': 'my half of the dinner', 'why': BROKEN_AM}]})   # grounded, but no category
+    r = scam_check.check(SAFE, 'x@gmail.com', '50.00', language='am')
+    assert r['scam_score'] == 85 and r['red_flags'] == [] and r['explanation'] == ''
+
+
+def test_amharic_safe_message_uses_reviewed_none_text(monkeypatch):
+    fake_ai(monkeypatch, {'scam_score': 3, 'red_flags': [], 'explanation': f'Looks fine. {BROKEN_AM}'})
+    r = scam_check.check(SAFE_INVOICE, 'designer@example.com', '45.00', language='am')
+    assert r['explanation'] == t('scam.none', 'am') and r['explanation'] in AM_REVIEWED
+
+
+def test_english_still_uses_the_ai_explanation(monkeypatch):
+    fake_ai(monkeypatch, {'scam_score': 95, 'explanation': 'Classic gift card scam.', 'red_flags': [
+        {'quote': 'gift cards', 'why': 'gift cards are a scam payment', 'category': 'gift_card_or_crypto'}]})
+    r = scam_check.check(GIFT_CARD, 'x@gmail.com', '50.00', language='en')
+    assert r['explanation'] == 'Classic gift card scam.' and 'ai_explanation_en' not in r
 
 
 def test_prompt_marks_text_as_untrusted(monkeypatch):
@@ -179,8 +241,8 @@ def test_prompt_marks_text_as_untrusted(monkeypatch):
         seen.update(system=system, user=user)
         return {'scam_score': 10, 'red_flags': [], 'explanation': 'ok'}
     monkeypatch.setattr(ai_provider, 'chat_json', capture)
-    scam_check.check('hello', 'a@b.co', '5.00', language='am')
-    assert 'UNTRUSTED' in seen['system'] and 'Amharic' in seen['system']
+    scam_check.check('hello', 'a@b.co', '5.00', language='es')
+    assert 'UNTRUSTED' in seen['system'] and 'Spanish' in seen['system']
     assert '<<<MESSAGE\nhello\nMESSAGE>>>' in seen['user']
 
 
@@ -249,7 +311,7 @@ def test_scams_written_in_other_languages(lang, text):
     assert r['explanation'] == t('scam.many', lang, flags=t('flag.join', lang).join(r['red_flags']))
 
 
-@pytest.mark.parametrize('lang', ['zh', 'hi', 'ne', 'am'])
+@pytest.mark.parametrize('lang', ['zh', 'hi', 'ne'])   # Amharic asks the AI in English on purpose
 def test_ai_answer_in_wrong_script_is_rejected(monkeypatch, lang):
     fake_ai(monkeypatch, {'scam_score': 90, 'red_flags': [], 'explanation': 'English only'})
     assert scam_check.check(GIFT_CARD, 'x@gmail.com', '50.00', language=lang)['source'] == 'keywords'

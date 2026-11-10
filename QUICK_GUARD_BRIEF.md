@@ -116,7 +116,12 @@ keyword score, plus 40 points for trying to manipulate the checker.
 Warnings, red flags and spoken explanations are available in **English, Amharic (አማርኛ), Spanish, French,
 Mandarin, Hindi and Nepali**, with keyword rules in each language. `/tts` turns the explanation into speech
 with Microsoft Edge neural voices (e.g. `am-ET-MekdesNeural` for Amharic), so it works on a server with no
-speakers. Amharic is reviewed by a native speaker. The other languages, and the three newest Amharic labels
+speakers. **Amharic is fixed-text** (`'fixed_text': True` in `translations.py`): the AI is asked in English, and
+only its score and quoted evidence are used. Each AI red flag names one of the 11 flag categories, so it is shown
+under that category's reviewed Amharic name with the quoted words. The warning (risk level, red flags, advice)
+is built only from the reviewed strings, because the AI's free-form Amharic was sometimes wrong (it once called
+gift cards "ገፅታ የሆነ ገበታ ካርዶች" instead of "የስጦታ ካርድ"). The AI's English explanation is shown underneath, never spoken.
+Amharic is reviewed by a native speaker. The other languages, and the three newest Amharic labels
 (secrecy, "aimed at the AI", prize), still need a native-speaker check.
 
 ## 7. Deploying (Render)
@@ -135,7 +140,7 @@ Past that, checks fall back to keyword rules until the minute resets.
 
 ## 8. Test results
 
-- **239 automated tests pass** (`python -m pytest -q`), including the audit's regression tests and tests for both live bugs below.
+- **243 automated tests pass** (`python -m pytest -q`), including the audit's regression tests and tests for both live bugs below.
 - **Scam accuracy, 40 real messages through the live AI:** 20 normal (including "", "ቡና", emojis, typos)
   → all LOW; 20 scams (fake limits, invoices, support callbacks, gift cards, crypto, overpayment, prizes,
   family emergencies, bad links, 3 in Amharic) → all HIGH. **0 false positives, 0 false negatives, every

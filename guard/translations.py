@@ -5,6 +5,12 @@ the other languages still need a native-speaker check.
 
 'script' is a regex for the writing system an AI answer must contain, so an
 answer in the wrong language is rejected (None = Latin script, not checked).
+
+'fixed_text': True means users never see or hear AI-written text in that
+language. The AI is asked in English (for the score and the quoted evidence
+only), and the warning is built from the reviewed strings below: the risk
+level, the red-flag names, and the advice. The AI's English explanation is
+still returned separately.
 """
 
 DEFAULT_LANGUAGE = 'en'
@@ -17,7 +23,8 @@ LANGUAGES = {
     'en': {'name': 'English', 'voice': 'en-US-AriaNeural',
            'ai_name': 'English', 'script': None},
     'am': {'name': 'አማርኛ (Amharic)', 'voice': 'am-ET-MekdesNeural',
-           'ai_name': "Amharic (አማርኛ), written in Ge'ez (Ethiopic) script", 'script': _ETHIOPIC},
+           'ai_name': "Amharic (አማርኛ), written in Ge'ez (Ethiopic) script", 'script': _ETHIOPIC,
+           'fixed_text': True},   # the AI's free-form Amharic was often wrong
     'es': {'name': 'Español (Spanish)', 'voice': 'es-US-PalomaNeural',
            'ai_name': 'Spanish (español)', 'script': None},
     'fr': {'name': 'Français (French)', 'voice': 'fr-FR-DeniseNeural',

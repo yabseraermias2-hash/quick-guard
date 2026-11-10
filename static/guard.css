@@ -54,6 +54,7 @@
 .g-result.high .g-score-bar { background:var(--g-high); }
 .g-score-text, .g-meta { font-size:10px; color:var(--text2); letter-spacing:.05rem; }
 .g-explanation { font-size:12px; line-height:1.55; color:var(--text); margin:0; }
+.g-ai-en { font-size:11px; line-height:1.5; color:var(--text2); margin:8px 0 0; }
 .g-flags { margin:0; padding-left:16px; font-size:11px; color:var(--text); line-height:1.5; }
 .g-flags li::marker { color:var(--g-high); }
 .g-secondary, .g-confirm {

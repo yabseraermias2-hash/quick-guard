@@ -40,7 +40,9 @@ to hear the spoken warnings. Tick **DEMO MODE** so the site uses a sample city i
 3. Click **CHECK WITH QUICK GUARD**.
 4. The orb turns **red**: **HIGH RISK · BLOCKED**. The explanation and red flags appear in Amharic, each
    flag quotes the exact words that gave the scam away, the warning is **spoken aloud in Amharic**
-   (click **Play warning again** if your browser blocked autoplay), and **no PayPal buttons are shown**. The server also refuses to
+   (click **Play warning again** if your browser blocked autoplay), and **no PayPal buttons are shown**.
+   The Amharic warning is built only from pre-written, reviewed Amharic sentences, never free-form AI
+   Amharic. The AI's own explanation is shown underneath in English. The server also refuses to
    create a PayPal order for this check, even if someone calls the API directly.
 
 ### 3. Impossible travel (≈ 1 minute; do test 1 first)
@@ -113,13 +115,14 @@ Every result shows which model actually answered, or "keyword rules only". Ident
 - **No double payments.** Capture claims the check atomically before calling PayPal, and PayPal's `PayPal-Request-Id` makes the capture idempotent.
 - **Secrets stay secret.** Keys live only in `.env` (local) or Render environment variables. The app's logs never contain keys, tokens, full payment bodies or IP addresses.
 - **Privacy.** Location is rounded to about 11 km the moment it arrives, and exact GPS is never stored. Nothing is written to disk: checks and history live in memory and expire.
+- **Reviewed Amharic only.** In Amharic, everything shown and spoken comes from pre-written, reviewed sentences (risk level, red-flag names, advice). The AI only scores the message and quotes the evidence.
 - **Prompt-injection resistant.** Message text is fenced and labeled as data for the AI. Trying to talk the checker into "safe" adds +40 risk. AI flags that don't quote the message are dropped.
 - **Input validation.** Amount 0.01–10,000.00 USD; strict email format; message ≤ 5,000 characters; request bodies ≤ 256 KB.
 - **Rate limiting.** 30 checks per 10 minutes, per browser session and per visitor IP (the real IP behind Render's and Cloudflare's proxies, which can't be faked by headers).
 - **No HTML injection.** Every server value is inserted as plain text.
 - **Hardened cookies.** `HttpOnly`, `SameSite=Lax`, and `Secure` on the live site.
 - **Powerful local tools are off.** QUICK's original desktop tools (chat, code runner, scanners, microphone) return 403 and are hidden on the public site.
-- **Tested.** 239 automated tests, including attack tests: prompt injection, XSS, malformed input, double-capture races, spoofed IP headers.
+- **Tested.** 243 automated tests, including attack tests: prompt injection, XSS, malformed input, double-capture races, spoofed IP headers.
 
 ## Run it locally
 
