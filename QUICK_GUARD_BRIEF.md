@@ -149,6 +149,10 @@ Past that, checks fall back to keyword rules until the minute resets.
 - **Attacks:** 5 prompt injections stay HIGH, even with an AI that fully obeys them. XSS payloads stay plain text.
   20+ malformed inputs and 8 malformed body types get clean 4xx errors. The 31st check is rate-limited.
   Every local-only route returns 403. No secret or access token appears in any response, page, log or tracked file.
+- **Final live check (2026-11-10, Chrome, DEMO MODE):** safe invoice → LOW 5/100 with PayPal buttons, and the server
+  creates a sandbox order; fake "PayPal Security Team" message → HIGH 100/100, blocked, 8 quoted red flags, spoken
+  in English and in Amharic (`am-ET-MekdesNeural`); the server refuses an order for the HIGH check (403). All answers came
+  from Groq `openai/gpt-oss-120b`.
 - **AI failure:** Ollama down, a wrong or missing Groq key, and 15 kinds of broken AI JSON all fall back to keyword
   rules with calm wording, and the page keeps working.
 
@@ -165,3 +169,10 @@ Past that, checks fall back to keyword rules until the minute resets.
 - The free Render plan sleeps when idle, so the first visit after a while takes ~30–60 s to wake.
 - IP location is city-level and can be wrong (VPNs, mobile networks). That's why travel only adds risk and never blocks on its own unless it's physically impossible.
 - QUICK's original chat (`/chat`) needs a local Ollama, so on the deployed site it returns 403 and the chat box is hidden.
+
+## 11. What's next
+
+- **Recipient check** (in progress, not deployed): look up the recipient email's domain (does it exist, can it receive
+  mail, how old is it, is it a throwaway inbox or a PayPal look-alike) and hand those facts to the AI.
+- Native-speaker review of every language, starting with the newest Amharic labels.
+- Save trusted locations and history in a database, so restarts don't clear them and the app can run more than one worker.
