@@ -62,9 +62,9 @@ These are **PayPal Sandbox** test accounts. They hold fake sandbox money only, a
 
 | | |
 |---|---|
-| **Send to** (sandbox business email, paste into the form) | `[FILL IN: sandbox business email]` |
-| Sandbox buyer email (log in to the PayPal popup) | `[FILL IN: sandbox buyer email]` |
-| Sandbox buyer password | `[FILL IN: sandbox buyer password]` |
+| **Send to** (sandbox business email, paste into the form) | `sb-plkh353690910@business.example.com` |
+| Sandbox buyer email (log in to the PayPal popup) | `sb-4ix5k50666527@personal.example.com` |
+| Sandbox buyer password | `7gM{5Z?6` |
 
 Checks and payment history live in server memory, so a server restart (or ~15 minutes) clears them.
 If the impossible-travel test shows LOW, run test 1 again first.
