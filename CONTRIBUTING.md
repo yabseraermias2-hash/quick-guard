@@ -1,6 +1,6 @@
 # Contributing to QUICK Guard
 
-A simple workflow for our team of 4. Follow these steps every time.
+A simple workflow for anyone contributing. Follow these steps every time.
 
 ## One-time setup
 
@@ -66,7 +66,7 @@ A good message says *what* changed: "Add haversine distance function", not "stuf
 git push -u origin feature/scam-check
 ```
 Then open the link git prints, or go to the repo on GitHub → **Compare & pull request**.
-Write one or two sentences about what you built and how to test it, and ask a teammate to review it.
+Write one or two sentences about what you built and how to test it, and ask someone to review it.
 
 ### 5. Merge only after someone else reviews it
 After the PR is merged, go back to step 1 for your next feature.
@@ -83,4 +83,4 @@ After the PR is merged, go back to step 1 for your next feature.
 
 Don't panic. Run `git pull origin main` on your branch, open the files git lists, and look for the
 `<<<<<<<`, `=======`, `>>>>>>>` markers. Keep the right code, delete the markers, then `git add` and
-`git commit`. If you're unsure, ask the teammate who wrote the other side.
+`git commit`. If you're unsure, ask the author of the other change.
